@@ -1,0 +1,6 @@
+
+java_library(
+    name = "foo",
+    srcs = ["Foo.java"],
+    deps = ["@maven//com/google/guava"],
+)
