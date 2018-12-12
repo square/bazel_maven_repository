@@ -213,10 +213,10 @@ def _validate_not_insecure_artifacts(artifacts = {}):
         if not bool(sha):
             insecure_artifacts += { spec : sha }
     if bool(insecure_artifacts):
-        fail("\n%s %s [\n    %s\n]" % (
+        fail("\n%s %s [\n%s]" % (
              "These artifacts were specified without sha256 hashes.",
              "Either add hashes or move to insecure_artifacts:",
-             "\n    ".join(sorted(["\"%s\"" % x for x in insecure_artifacts.keys()]))
+             "".join(sorted(["    \"%s\",\n" % x for x in insecure_artifacts.keys()]))
         ))
 
 def maven_repository_specification(
