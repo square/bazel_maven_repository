@@ -207,8 +207,29 @@ def _check_for_duplicates(artifacts):
         elif sets.pop(versions).endswith("-SNAPSHOT"):
             fail("Snapshot versions are not supported in maven_artifacts.bzl.  Please fix %s to a pinned version." % artifact);
 
-def maven_repository_specification(name, artifacts, repository_urls = ["https://repo1.maven.org/maven2"]):
+def _validate_not_insecure_artifacts(artifacts = {}):
+    insecure_artifacts = {}
+    for spec, sha in artifacts.items():
+        if not bool(sha):
+            insecure_artifacts += { spec : sha }
+    if bool(insecure_artifacts):
+        fail("%s %s %s" % (
+             "These artifacts were specified without sha256 hashes.",
+             "Either add hashes or move to insecure_artifacts:",
+             insecure_artifacts.keys()
+        ))
+
+def maven_repository_specification(
+        name,
+        artifacts = {},
+        insecure_artifacts = [],
+        repository_urls = ["https://repo1.maven.org/maven2"]):
     """Generates the bazel repo and download logic for each artifact (and repository URL prefixes) in the WORKSPACE."""
+
+    _validate_not_insecure_artifacts(artifacts)
+
+    for spec in insecure_artifacts:
+        artifacts += { spec : "" }
     if len(repository_urls) == 0:
         fail("You must specify at least one repository root url.")
     if len(artifacts) == 0:

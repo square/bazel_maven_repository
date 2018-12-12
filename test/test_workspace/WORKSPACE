@@ -5,6 +5,9 @@ local_repository(name = "maven_repository_rules", path = "../..")
 load("@maven_repository_rules//maven:maven.bzl", "maven_repository_specification")
 maven_repository_specification(
     name = "maven",
+    insecure_artifacts = [
+        "com.google.dagger:dagger:1.4",
+    ],
     artifacts = {
         "com.google.guava:guava:25.0-jre": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9",
     }
