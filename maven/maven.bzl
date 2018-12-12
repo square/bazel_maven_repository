@@ -216,7 +216,7 @@ def _validate_not_insecure_artifacts(artifacts = {}):
         fail("\n%s %s [\n    %s\n]" % (
              "These artifacts were specified without sha256 hashes.",
              "Either add hashes or move to insecure_artifacts:",
-             "\n    ".join(sorted(insecure_artifacts.keys()))
+             "\n    ".join(sorted(["\"%s\"" % x for x in insecure_artifacts.keys()]))
         ))
 
 def maven_repository_specification(
