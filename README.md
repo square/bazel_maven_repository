@@ -3,16 +3,31 @@
 A bazel ruleset creating a more idiomatic bazel representation of a maven repo using a
 pinned list of artifacts.
 
+Release: `0.1 (Alpha)`
+
+| Link | Sha |
+| ---- | --- |
+| [Zip File](https://github.com/israfil/bazel_maven_repository/archive/0.1.zip) | `ea4c36b5aee1cc17abac88ca5704927ef83f310126bde01eb66e993212ca555e` |
+| [Tarball](https://github.com/israfil/bazel_maven_repository/archive/0.1.tar.gz) | `54941a7427c954ac0477567c7dcb1e8cb60b53493ef6e48a65df475dde6c3847` |
+
+
 ## Overview
 
-*Bazel Rules for maven repositories* allow the specification of a list of artifacts which
+**Bazel Rules for Maven Repositories** allow the specification of a list of artifacts which
 constitute maven repository's universe of deps, and exposes these deps into a bazel *repository*
 namespace.  The name of the repository specification rule becomes the repository name in Bazel.
 For instance the following specification:
  
 ```python
-load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository") 
-git_repository(name = "maven_repository_rules", path = "../..")
+MAVEN_REPOSITORY_RULES_VERSION = "0.1"
+MAVEN_REPOSITORY_RULES_SHA = "ea4c36b5aee1cc17abac88ca5704927ef83f310126bde01eb66e993212ca555e"
+http_archive(
+    name = "maven_repository_rules",
+    urls = ["https://github.com/israfil/bazel_maven_repository/archive/%s.zip" % MAVEN_REPOSITORY_RULES_VERSION],
+    type = "zip",
+    strip_prefix = "bazel_maven_repository-%s" % MAVEN_REPOSITORY_RULES_VERSION,
+    sha256 = MAVEN_REPOSITORY_RULES_SHA,
+)
 load("@maven_repository_rules//maven:maven.bzl", "maven_repository_specification")
 maven_repository_specification(
     name = "maven",
