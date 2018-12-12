@@ -124,3 +124,12 @@ the generated bazel targets will not include any transitive dependency closure.
 
 Tools like Dagger or AutoValue will need special setup of a `java_plugin` target.  Also, dependencies
 like mockito with runtime dependencies on other packages may warrant their own wrapper targets.
+
+## Other Usage Notes
+
+Because of the nature of bazel repository/workspace operation, updating the list of artifacts may
+invalidate build caches, and force a re-run of workspace operations (and possibly reduce
+incrementality of the next build).  This is unavoidable.
+
+It may make sense, if one's maven universe gets big, to extract the list of artifacts into a 
+constant in a separate file (e.g. `maven_artifacts.bzl`) and import it. 
