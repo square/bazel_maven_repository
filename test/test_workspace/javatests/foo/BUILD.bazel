@@ -1,0 +1,9 @@
+package(default_visibility = ["//:__subpackages__"])
+java_test(
+    name = "FooTest",
+    srcs = ["FooTest.java"],
+    deps = [
+        "//java/foo",
+        "@maven//junit",
+    ],
+)

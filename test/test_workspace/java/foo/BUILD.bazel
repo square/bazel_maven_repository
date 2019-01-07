@@ -1,6 +1,10 @@
+package(default_visibility = ["//:__subpackages__"])
 
 java_library(
     name = "foo",
     srcs = ["Foo.java"],
-    deps = ["@maven//com/google/guava"],
+    deps = [
+        "@maven//com/google/dagger",
+        "@maven//com/google/guava",
+    ],
 )
