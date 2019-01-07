@@ -28,7 +28,7 @@ _supported_jvm_artifact_packaging = [
 # All supported artifact types (Can be extended for non-jvm packaging types.)
 _supported_artifact_packaging = _supported_jvm_artifact_packaging
 
-_DOWNLOAD_PREFIX = "file"
+_DOWNLOAD_PREFIX = "maven"
 
 _ARTIFACT_DOWNLOAD_BUILD_FILE_TEMPLATE = """
 package(default_visibility = ["//visibility:public"])
