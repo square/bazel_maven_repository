@@ -15,18 +15,7 @@
 #   A repository rule intended to be used in populating @maven_repository.
 #
 load(":sets.bzl", "sets")
-
-_artifact_template = "{group_path}/{artifact_id}/{version}/{artifact_id}-{version}.{suffix}"
-_artifact_template_with_classifier = "{group_path}/{artifact_id}/{version}/{artifact_id}-{version}-{classifier}.{suffix}"
-_artifact_pom_template = "{group_path}/{artifact_id}/{version}/{artifact_id}-{version}.pom"
-
-# Artifact types supported by maven_jvm_artifact()
-_supported_jvm_artifact_packaging = [
-    "jar",
-    "aar",
-]
-# All supported artifact types (Can be extended for non-jvm packaging types.)
-_supported_artifact_packaging = _supported_jvm_artifact_packaging
+load(":artifacts.bzl", "artifacts")
 
 _DOWNLOAD_PREFIX = "maven"
 
@@ -79,27 +68,28 @@ _MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
 )
 """
 
-def _maven_repository_impl(ctx):
+def _generate_maven_repository_impl(ctx):
+    # Generate the root WORKSPACE file
     repository_root_path = ctx.path(".")
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
 
-    artifacts = ctx.attr.artifacts
+    # Generate the per-group_id BUILD files.
     build_substitutes = ctx.attr.build_substitutes
-    groups = ctx.attr.groups
-    for group_id, specs in groups.items():
+    for group_id, specs in ctx.attr.grouped_artifacts.items():
+        ctx.report_progress("Generating build details for artifacts in %s" % group_id)
         specs = sets.add_all(sets.new(), specs)
         prefix = _MAVEN_REPO_BUILD_PREFIX.format(
             group_id = group_id, maven_rules_repository = ctx.attr.maven_rules_repository)
         target_definitions = []
+        group_path = group_id.replace(".", "/")
         for spec in specs:
-            artifact = _parse_maven_artifact_spec(spec)
-            group_path = "/".join(artifact.group_id.split("."))
+            artifact = artifacts.annotate(artifacts.parse_spec(spec))
             target_definitions += [
                 build_substitutes.get(
                     "%s:%s" % (artifact.group_id, artifact.artifact_id),
                     _MAVEN_REPO_TARGET_TEMPLATE.format(
                         target = artifact.third_party_target_name,
-                        artifact_coordinates = artifact.spec,
+                        artifact_coordinates = artifact.original_spec,
                     )
                 )
             ]
@@ -108,81 +98,19 @@ def _maven_repository_impl(ctx):
             "\n".join([prefix] + target_definitions),
         )
 
-_internal_maven_repository = repository_rule(
-    implementation = _maven_repository_impl,
+_generate_maven_repository = repository_rule(
+    implementation = _generate_maven_repository_impl,
     attrs = {
-        "artifacts": attr.string_dict(mandatory = True),
-        "groups": attr.string_list_dict(mandatory = True),
+        "grouped_artifacts": attr.string_list_dict(mandatory = True),
         "maven_rules_repository": attr.string(mandatory = False, default = "maven_repository_rules"),
         "build_substitutes": attr.string_dict(mandatory = True),
     },
 )
 
-def _parse_maven_artifact_spec(artifact_spec):
-    """ Builds a struct containing various paths, target names, and other derivatives from the artifact spec.
-
-        Intended only for use in other maven-oriented rules.
-    """
-    parts = artifact_spec.split(":")
-    packaging = "jar"
-    classifier = None
-
-    # parse spec
-    if len(parts) == 3:
-        group_id, artifact_id, version = parts
-    elif len(parts) == 4:
-        group_id, artifact_id, version, packaging = parts
-    elif len(parts) == 5:
-        group_id, artifact_id, version, packaging, classifier = parts
-    else:
-        fail("Invalid artifact: %s" % artifact_spec)
-
-    # assemble paths and target names and such.
-    group_elements = group_id.split(".")
-    artifact_id_elements = artifact_id.split("-")
-    artifact_id_elements = "_".join(artifact_id_elements).split(".")
-    maven_target_elements = group_elements + artifact_id_elements + (classifier.split("-") if classifier else [])
-    maven_target_name = "_".join(maven_target_elements)
-    third_party_target_name = "_".join(artifact_id_elements)
-    suffix = packaging # TODO(cgruber) support better packaging mapping, to handle .bundles which return jars, etc.
-    group_path = "/".join(group_elements)
-    if classifier:
-        artifact_relative_path = None if not version else _artifact_template_with_classifier.format(
-            group_path = group_path,
-            artifact_id = artifact_id,
-            version = version,
-            suffix = suffix,
-            classifier = classifier,
-        )
-    else:
-        artifact_relative_path = None if not version else _artifact_template.format(
-            group_path = group_path,
-            artifact_id = artifact_id,
-            version = version,
-            suffix = suffix,
-        )
-    artifact_relative_pom_path = _artifact_pom_template.format(
-        group_path = group_path,
-        artifact_id = artifact_id,
-        version = version,
-    ) if version else None
-
-    return struct(
-        maven_target_name = maven_target_name,
-        third_party_target_name = third_party_target_name,
-        artifact_relative_path = artifact_relative_path,
-        artifact_relative_pom_path = artifact_relative_pom_path,
-        spec = artifact_spec,
-        group_id = group_id,
-        artifact_id = artifact_id,
-        packaging = packaging,
-        classifier = classifier,
-        version = version,
-    )
-
+# Implementation of the maven_jvm_artifact rule.
 def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], exports = [],  **kwargs):
-    artifact = _parse_maven_artifact_spec(artifact_spec)
-    maven_target = "@%s//%s:%s" % (artifact.maven_target_name, _DOWNLOAD_PREFIX, artifact.artifact_relative_path)
+    artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
+    maven_target = "@%s//%s:%s" % (artifact.maven_target_name, _DOWNLOAD_PREFIX, artifact.path)
     import_target = artifact.maven_target_name + "_import"
     target_name = name if name else artifact.third_party_target_name
     exports = exports + deps # A temporary hack since the existing third_party artifacts use exports instead of deps.
@@ -193,15 +121,12 @@ def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], exports = []
     else:
         fail("Packaging %s not supported by maven_jvm_artifact." % artifact.packaging)
 
-def maven_jvm_artifact(artifact, name = None, deps = [], exports = [], visibility = ["//visibility:public"], **kwargs):
-    """Creates java or android library targets from maven_hosted .jar/.aar files."""
-    # redirect to _maven_jvm_artifact, so we can externally use the name "artifact" but internally use artifact_spec
-    _maven_jvm_artifact(artifact_spec = artifact, name = name, deps = deps, exports = exports, visibility = visibility, **kwargs)
-
-def _check_for_duplicates(artifacts):
+# Check... you know... for duplicates.  And fail if there are any, listing the extra artifacts.  Also fail if
+# there are -SNAPSHOT versions, since bazel requires pinned versions.
+def _check_for_duplicates(artifact_specs):
     distinct_artifacts = {}
-    for artifact_spec in artifacts:
-        artifact = _parse_maven_artifact_spec(artifact_spec)
+    for artifact_spec in artifact_specs:
+        artifact = artifacts.parse_spec(artifact_spec)
         distinct = "%s:%s" % (artifact.group_id, artifact.artifact_id)
         if not distinct_artifacts.get(distinct):
             distinct_artifacts[distinct] = {}
@@ -212,9 +137,10 @@ def _check_for_duplicates(artifacts):
         elif sets.pop(versions).endswith("-SNAPSHOT"):
             fail("Snapshot versions are not supported in maven_artifacts.bzl.  Please fix %s to a pinned version." % artifact);
 
-def _validate_not_insecure_artifacts(artifacts = {}):
+# If artifact/sha pair has missing sha hashes, reject it.
+def _validate_no_insecure_artifacts(artifact_specs = {}):
     insecure_artifacts = {}
-    for spec, sha in artifacts.items():
+    for spec, sha in artifact_specs.items():
         if not bool(sha):
             insecure_artifacts += { spec : sha }
     if bool(insecure_artifacts):
@@ -224,53 +150,83 @@ def _validate_not_insecure_artifacts(artifacts = {}):
              "".join(sorted(["    \"%s\",\n" % x for x in insecure_artifacts.keys()]))
         ))
 
+# The implementation of maven_repository_specification.
+#
+# Validates that all artifacts have sha hashes (or are in insecure_artifacts), splits artifacts into groups based on
+# their groupId, generates a fetch rule for each artifact, and calls the rule which generates the internal bazel
+# repository which replicates the maven repo structure.
+#
+def _maven_repository_specification(
+        name,
+        artifact_specs = {},
+        insecure_artifacts = [],
+        build_substitutes = {},
+        repository_urls = ["https://repo1.maven.org/maven2"]):
+
+    _validate_no_insecure_artifacts(artifact_specs)
+
+    for spec in insecure_artifacts:
+        artifact_specs += { spec : "" }
+    if len(repository_urls) == 0:
+        fail("You must specify at least one repository root url.")
+    if len(artifact_specs) == 0:
+        fail("You must register at least one artifact.")
+    _check_for_duplicates(artifact_specs)
+    grouped_artifacts = {}
+    for artifact_spec, sha256 in artifact_specs.items():
+        artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
+
+        # Track group_ids in order to build per-group BUILD files.
+        grouped_artifacts[artifact.group_id] = (
+            grouped_artifacts.get(artifact.group_id, default = []) + [artifact.original_spec])
+
+        if not bool(sha256):
+            sha256 = None # tidy empty strings - invalid shas will be rejected by the repository_ctx.download function.
+        urls = ["%s/%s" % (repo, artifact.path) for repo in repository_urls]
+        _fetch_artifact(
+            name = artifact.maven_target_name,
+            urls = urls,
+            local_path = artifact.path,
+            sha256 = sha256,
+        )
+    _generate_maven_repository(
+        name = name,
+        grouped_artifacts = grouped_artifacts,
+        build_substitutes = build_substitutes,
+    )
+
+
+####################
+# PUBLIC FUNCTIONS #
+####################
+
+# Creates java or android library targets from maven_hosted .jar/.aar files.
+def maven_jvm_artifact(artifact, name = None, deps = [], exports = [], visibility = ["//visibility:public"], **kwargs):
+    # redirect to _maven_jvm_artifact, so we can externally use the name "artifact" but internally use artifact_spec
+    _maven_jvm_artifact(artifact_spec = artifact, name = name, deps = deps, exports = exports, visibility = visibility, **kwargs)
+
+
+# Description:
+#   Generates the bazel repo and download logic for each artifact (and repository URL prefixes) in the WORKSPACE
+#   Makes a bazel repository out of the artifacts supplied, downloading them into a well-ordered repository structure,
+#   targets (by default, including name mangling).
+#
+#   A substitution mechanism is present to permit swapping in alternative build rules, say for cases where you need
+#   to use an `exported_plugins` property, e.g. using dagger.  The text supplied naively replaces the automatically
+#   generated `maven_jvm_artifact()` rule.
+#
 def maven_repository_specification(
         name,
         artifacts = {},
         insecure_artifacts = [],
         build_substitutes = {},
         repository_urls = ["https://repo1.maven.org/maven2"]):
-    """Generates the bazel repo and download logic for each artifact (and repository URL prefixes) in the WORKSPACE
-
-    Makes a bazel repository out of the artifacts supplied, downloading them into a well-ordered repository structure,
-    with maven group_id elements converting into bazel package structures, and artifact_id names turning into build
-    targets (by default, including name mangling).
-
-    A substitution mechanism is present to permit swapping in alternative build rules, say for cases where you need
-    to use an `exported_plugins` property, e.g. using dagger.  The text supplied naively replaces the automatically
-    generated `maven_jvm_artifact()` rule.
-    """
-
-    _validate_not_insecure_artifacts(artifacts)
-
-    for spec in insecure_artifacts:
-        artifacts += { spec : "" }
-    if len(repository_urls) == 0:
-        fail("You must specify at least one repository root url.")
-    if len(artifacts) == 0:
-        fail("You must register at least one artifact.")
-    _check_for_duplicates(artifacts)
-    group_ids = {}
-    for artifact_spec, sha256 in artifacts.items():
-        artifact = _parse_maven_artifact_spec(artifact_spec)
-
-        # Track group_ids in order to build per-group BUILD files.
-        group_ids[artifact.group_id] = group_ids.get(artifact.group_id, default = []) + [artifact.spec]
-
-        if not bool(sha256):
-            sha256 = None
-        urls = []
-        for repo in repository_urls:
-            urls += ["%s/%s" % (repo, artifact.artifact_relative_path)]
-        _fetch_artifact(
-            name = artifact.maven_target_name,
-            urls = urls,
-            local_path = artifact.artifact_relative_path,
-            sha256 = sha256,
-        )
-    _internal_maven_repository(
+    # Redirected to _maven_repository_specification to allow the public parameter "artifacts" without conflicting
+    # with the artifact utility struct.
+    _maven_repository_specification(
         name = name,
-        artifacts = artifacts,
-        groups = group_ids,
+        artifact_specs = artifacts,
+        insecure_artifacts = insecure_artifacts,
         build_substitutes = build_substitutes,
+        repository_urls = repository_urls,
     )
