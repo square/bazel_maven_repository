@@ -3,12 +3,28 @@ workspace(name = "test_workspace")
 # Set up maven
 local_repository(name = "maven_repository_rules", path = "../..")
 load("@maven_repository_rules//maven:maven.bzl", "maven_repository_specification")
+load(":build_substitution_templates.bzl", "DAGGER_PLUGIN_BUILD_SUBSTITUTE")
+
 maven_repository_specification(
     name = "maven",
     insecure_artifacts = [
-        "com.google.dagger:dagger:1.4",
+        "com.google.dagger:dagger:2.20",
+        "com.google.dagger:dagger-compiler:2.20",
+        "com.google.dagger:dagger-producers:2.20",
+        "com.google.dagger:dagger-spi:2.20",
+        "com.google.code.findbugs:jsr305:3.0.2",
+        "com.google.errorprone:javac-shaded:9+181-r4173-1",
+        "com.google.googlejavaformat:google-java-format:1.6",
+        "com.squareup:javapoet:1.11.1",
+        "org.checkerframework:checker-compat-qual:2.5.5",
+        "javax.annotation:jsr250-api:1.0",
+        "javax.inject:javax.inject:1",
+        "junit:junit:4.13-beta-1",
     ],
     artifacts = {
         "com.google.guava:guava:25.0-jre": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9",
+    },
+    build_substitutes = {
+        "com.google.dagger:dagger": DAGGER_PLUGIN_BUILD_SUBSTITUTE.format(dagger_version = "2.20", repo = "maven"),
     }
 )

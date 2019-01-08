@@ -102,7 +102,102 @@ off-line validation that the SHA hashes are the properly published hashes.
 
 ## Variation
 
+### Substitution of build targets
+
+One can provide a `BUILD.bazel file snippet` that will be substituted for the auto-generated target
+implied by a maven artifact.  This is very useful for providing an annotation-processor-exporting
+alternative target.  The substitution is naive, so the string needs to be appropriate and any rules
+need to be correct, contain the right dependencies, etc. 
+
+
+A simple use-case would be to substitute a target name (e.g. "mockito-core" -> "mockito") for
+cleaner/easier use in bazel:
+
+```python
+MOCKITO_BUILD_SNIPPET = """maven_jvm_artifact(name = "mockito", artifact = "org.mockito:mockito-core:2.20.1")"""
+
+maven_repository_specification(
+    name = "maven",
+    insecure_artifacts = [
+        "org.mockito:mockito-core:2.20.1",
+        # ... all the other deps.
+    ],
+    build_substitutes = {
+        "org.mockito:mockito-core": MOCKITO_BUILD_SNIPPET,
+    }
+)
+```
+
+This would allow the following use in a `BUILD.bazel` file.
+
+```python
+java_test(
+  name = "MyTest",
+  srcs = "MyTest.java",
+  deps = [
+    # ... other deps
+    "@maven//org/mockito" # instead of "@maven//org/mockito:mockito-core"
+  ],
+)
+```
+
+More complex use-cases are possible, such as adding substitute targets with annotation processing `java_plugin`
+targets and exports.  An example with Dagger would look like this (with the basic rule imports assumed):
+
+```python
+DAGGER_PROCESSOR_SNIPPET = """
+# use this target
+java_library(name = "dagger", exports = [":dagger_api"], exported_plugins = [":dagger_plugin"])
+
+# alternatively-named import of the raw dagger library.
+maven_jvm_artifact(name = "dagger_api", artifact = "com.google.dagger:dagger:2.20")
+
+java_plugin(
+    name = "dagger_plugin",
+    processor_class = "dagger.internal.codegen.ComponentProcessor",
+    generates_api = True,
+    deps = [
+        ":dagger_api", # imported above
+        ":dagger_compiler", # auto-generated into the same package
+        ":dagger_producers", # auto-generated into the same package
+        ":dagger_spi", # auto-generated into the same package
+        "@maven//com/google/code/findbugs:jsr305",
+        # ... all the other deps of dagger_compiler
+    ],
+)
+"""
+
+maven_repository_specification(
+    name = "maven",
+    insecure_artifacts = [
+        "com.google.dagger:dagger:2.20",
+        "com.google.dagger:dagger-compiler:2.20",
+        "com.google.dagger:dagger-producers:2.20",
+        "com.google.dagger:dagger-spi:2.20",
+        "com.google.code.findbugs:jsr305:3.0.2",
+        # ... all the other deps.
+    ],
+    build_substitutes = {
+        "com.google.dagger:dagger": DAGGER_PROCESSOR_SNIPPET,
+    }
+)
+```
+
+> Note: This won't build as-stated, because it's missing the extra deps dagger-compiler requires.  A more full
+> (working) example can be found in [test/test_workspace/WORKSPACE](test/test_workspace/WORKSPACE).  The
+> above is to illustrate the pattern.
+
+Thereafter, any target with a dependency on (in this example) `@maven//com/google/dagger` will invoke annotation
+processing and generate any dagger-generated code.  The same pattern could be used for
+[Dagger](http://github.com/google/dagger), [AutoFactory and AutoValue](http://github.com/google/auto), etc.
+
+Such snippet constants can be extracted into .bzl files and imported to keep the WORKSPACE file tidy. In the
+future some standard templates may be offered by this project, but not until deps validation is available, as
+it would be too easy to have templates' deps lists go out of date as versions bumped, if no other validation
+prevented it or notified about it.
+
 ### Packaging
+
 Optionally, an artifact may specify a packaging. Valid artifact coordinates are listable this way:
 `"group_id:artifact_id:version[:packaging]"`
 
@@ -117,13 +212,10 @@ Classifiers are tacked on the end, e.g. `"foo.bar:blah:1.0:jar:some-classifier"`
  
 ## Limitations
 
-This doesn't assign inter-dependencies between maven artifacts, nor does it hook up annotation
-procesors or do other things you might want.  Future versions may support some of these features,
-as well as validation that your artifact list is complete to satisfy all its dependencies.  For now,
-the generated bazel targets will not include any transitive dependency closure.
-
-Tools like Dagger or AutoValue will need special setup of a `java_plugin` target.  Also, dependencies
-like mockito with runtime dependencies on other packages may warrant their own wrapper targets.
+This doesn't recreate the dependencies between maven artifacts within the generated bazel rules.
+Future versions may support this, as well as validation that your artifact list is complete to
+satisfy all its dependencies.  For now, the generated bazel targets will not include any transitive
+dependency closure (unless replaced by a substitution snippet).
 
 ## Other Usage Notes
 

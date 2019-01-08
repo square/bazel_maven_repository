@@ -84,6 +84,7 @@ def _maven_repository_impl(ctx):
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
 
     artifacts = ctx.attr.artifacts
+    build_substitutes = ctx.attr.build_substitutes
     groups = ctx.attr.groups
     for group_id, specs in groups.items():
         specs = sets.add_all(sets.new(), specs)
@@ -94,9 +95,12 @@ def _maven_repository_impl(ctx):
             artifact = _parse_maven_artifact_spec(spec)
             group_path = "/".join(artifact.group_id.split("."))
             target_definitions += [
-                _MAVEN_REPO_TARGET_TEMPLATE.format(
-                    target = artifact.third_party_target_name,
-                    artifact_coordinates = artifact.spec,
+                build_substitutes.get(
+                    "%s:%s" % (artifact.group_id, artifact.artifact_id),
+                    _MAVEN_REPO_TARGET_TEMPLATE.format(
+                        target = artifact.third_party_target_name,
+                        artifact_coordinates = artifact.spec,
+                    )
                 )
             ]
         ctx.file(
@@ -110,6 +114,7 @@ _internal_maven_repository = repository_rule(
         "artifacts": attr.string_dict(mandatory = True),
         "groups": attr.string_list_dict(mandatory = True),
         "maven_rules_repository": attr.string(mandatory = False, default = "maven_repository_rules"),
+        "build_substitutes": attr.string_dict(mandatory = True),
     },
 )
 
@@ -223,8 +228,18 @@ def maven_repository_specification(
         name,
         artifacts = {},
         insecure_artifacts = [],
+        build_substitutes = {},
         repository_urls = ["https://repo1.maven.org/maven2"]):
-    """Generates the bazel repo and download logic for each artifact (and repository URL prefixes) in the WORKSPACE."""
+    """Generates the bazel repo and download logic for each artifact (and repository URL prefixes) in the WORKSPACE
+
+    Makes a bazel repository out of the artifacts supplied, downloading them into a well-ordered repository structure,
+    with maven group_id elements converting into bazel package structures, and artifact_id names turning into build
+    targets (by default, including name mangling).
+
+    A substitution mechanism is present to permit swapping in alternative build rules, say for cases where you need
+    to use an `exported_plugins` property, e.g. using dagger.  The text supplied naively replaces the automatically
+    generated `maven_jvm_artifact()` rule.
+    """
 
     _validate_not_insecure_artifacts(artifacts)
 
@@ -253,4 +268,9 @@ def maven_repository_specification(
             local_path = artifact.artifact_relative_path,
             sha256 = sha256,
         )
-    _internal_maven_repository(name = name, artifacts = artifacts, groups = group_ids)
+    _internal_maven_repository(
+        name = name,
+        artifacts = artifacts,
+        groups = group_ids,
+        build_substitutes = build_substitutes,
+    )
