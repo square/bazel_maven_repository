@@ -6,9 +6,6 @@ load("@maven_repository_rules//maven:maven.bzl", "maven_repository_specification
 load(
     ":build_substitution_templates.bzl",
     "DAGGER_BUILD_SUBSTITUTE_WITH_PLUGIN",
-    "DAGGER_COMPILER_BUILD_SUBSTITUTE",
-    "DAGGER_PRODUCERS_BUILD_SUBSTITUTE",
-    "DAGGER_SPI_BUILD_SUBSTITUTE",
     "GOOGLE_JAVA_FORMAT_BUILD_SUBSTITUTE",
 )
 
@@ -33,20 +30,22 @@ maven_repository_specification(
         "org.hamcrest:hamcrest-core:1.3",
     ],
     artifacts = {
+        # For illustration, most artifacts should actually be in this form, to ensure that only known .jar contents
+        # are imported into the workspace. (repository injection attacks via DNS poisoning are no fun)
         "com.google.guava:guava:25.0-jre": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9",
     },
+    target_substitutes = {
+        # Because we rewrite dagger -> dagger_spi (and make a wrapper target "dagger" that exports the dagger
+        # annotation processor) we need to rewrite the internal dependencies inside the com/google/dagger package
+        # to reflect this.
+        # "groupId": { "full bazel target": "full alternate target" }
+        "com.google.dagger": {
+            "@maven//com/google/dagger:dagger": "@maven//com/google/dagger:dagger_api",
+        },
+    },
     build_substitutes = {
-        # Because we rewrite the core dagger target, upon which other dagger impl packages depend, including the
-        # java_plugin which in turn depends on those, this creates a build cycle.  So we replace the dagger bits with
-        # updated deps list, instead of relying on the targets inferred from pom metadata.  These sorts of interventions
-        # should be fairly rare in the deps graph, as only things like annotation processors need this sort of wrapped
-        # intervention.
-        #
-        # TODO(cgruber) provide a more precise and terse option of BUILD surgery.
         "com.google.dagger:dagger": DAGGER_BUILD_SUBSTITUTE_WITH_PLUGIN.format(dagger_version = "2.20"),
-        "com.google.dagger:dagger-compiler": DAGGER_COMPILER_BUILD_SUBSTITUTE.format(dagger_version = "2.20"),
-        "com.google.dagger:dagger-producers": DAGGER_PRODUCERS_BUILD_SUBSTITUTE.format(dagger_version = "2.20"),
-        "com.google.dagger:dagger-spi": DAGGER_SPI_BUILD_SUBSTITUTE.format(dagger_version = "2.20"),
         "com.google.googlejavaformat:google-java-format": GOOGLE_JAVA_FORMAT_BUILD_SUBSTITUTE,
     }
 )
+
