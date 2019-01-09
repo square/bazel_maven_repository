@@ -122,7 +122,7 @@ def _generate_maven_repository_impl(ctx):
 
     # Generate the per-group_id BUILD files.
     build_substitutes = ctx.attr.build_substitutes
-    target_substitutes = dicts.decode_nested(ctx.attr.target_substitutes)
+    target_substitutes = dicts.decode_nested(ctx.attr.dependency_target_substitutes)
     processed_artifacts = sets.new()
     for specs in ctx.attr.grouped_artifacts.values():
         artifact_structs = [artifacts.parse_spec(s) for s in specs]
@@ -136,7 +136,6 @@ def _generate_maven_repository_impl(ctx):
             group_id = group_id, maven_rules_repository = ctx.attr.maven_rules_repository)
         target_definitions = []
         group_path = group_id.replace(".", "/")
-        full_package = "@%s//%s" % (ctx.attr.name, group_path)
         for spec in specs:
             artifact = artifacts.annotate(artifacts.parse_spec(spec))
             coordinates = "%s:%s" % (artifact.group_id, artifact.artifact_id)
@@ -149,7 +148,7 @@ def _generate_maven_repository_impl(ctx):
             for dep in maven_deps:
                 found_artifacts[dep.coordinate] = dep
                 bazel_deps += [_convert_maven_dep(ctx.attr.name, dep)]
-            normalized_deps = [_normalize_target(x, full_package, package_target_substitutes) for x in bazel_deps]
+            normalized_deps = [_normalize_target(x, group_path, package_target_substitutes) for x in bazel_deps]
             unregistered = sets.difference(sets.add_all(sets.new(), found_artifacts), processed_artifacts)
             if bool(unregistered) and not bool(build_substitutes.get(coordinates)):
                 unregistered_deps = [poms.format(x) for x in maven_deps if sets.contains(unregistered, x.coordinate)]
@@ -179,7 +178,7 @@ _generate_maven_repository = repository_rule(
         "grouped_artifacts": attr.string_list_dict(mandatory = True),
         "repository_urls": attr.string_list(mandatory = True),
         "maven_rules_repository": attr.string(mandatory = False, default = "maven_repository_rules"),
-        "target_substitutes": attr.string_list_dict(mandatory = True),
+        "dependency_target_substitutes": attr.string_list_dict(mandatory = True),
         "build_substitutes": attr.string_dict(mandatory = True),
     },
 )
@@ -238,7 +237,7 @@ def _maven_repository_specification(
         artifact_specs = {},
         insecure_artifacts = [],
         build_substitutes = {},
-        target_substitutes = {},
+        dependency_target_substitutes = {},
         repository_urls = ["https://repo1.maven.org/maven2"]):
 
     _validate_no_insecure_artifacts(artifact_specs)
@@ -270,13 +269,13 @@ def _maven_repository_specification(
 
     # Skylark rules can't take in arbitrarily deep dicts, so we rewrite dict(string->dict(string, string)) to an
     # encoded (but trivially splittable) dict(string->list(string)).  Yes it's gross.
-    target_substitutes_rewritten = dicts.encode_nested(target_substitutes)
+    dependency_target_substitutes_rewritten = dicts.encode_nested(dependency_target_substitutes)
 
     _generate_maven_repository(
         name = name,
         grouped_artifacts = grouped_artifacts,
         repository_urls = repository_urls,
-        target_substitutes = target_substitutes_rewritten,
+        dependency_target_substitutes = dependency_target_substitutes_rewritten,
         build_substitutes = build_substitutes,
     )
 
@@ -316,7 +315,7 @@ def maven_repository_specification(
 
         # The dictionary of per-group target substitutions.  These must be in the format:
         # "@myreponame//path/to/package:target": "@myrepotarget//path/to/package:alternate"
-        target_substitutes = {},
+        dependency_target_substitutes = {},
 
         # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
         repository_urls = ["https://repo1.maven.org/maven2"]):
@@ -328,6 +327,6 @@ def maven_repository_specification(
         artifact_specs = artifacts,
         insecure_artifacts = insecure_artifacts,
         build_substitutes = build_substitutes,
-        target_substitutes = target_substitutes,
+        dependency_target_substitutes = dependency_target_substitutes,
         repository_urls = repository_urls,
     )
