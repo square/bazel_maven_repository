@@ -41,16 +41,8 @@ def _difference(set_dict1, set_dict2):
     """Returns the elements that reflect the set difference (items in set_dict2 that are not in set_dict1)"""
     return sets.add_all(sets.new(), [x for x in set_dict1 if not sets.contains(set_dict2, x)])
 
-def _disjunctive_union(set_dict1, set_dict2):
-    """Returns a set containing all the elements in the supplied sets are not contained in both sets."""
-    result = sets.new()
-    sets.add_all(result, sets.difference(set_dict1, set_dict2))
-    sets.add_all(result, sets.difference(set_dict2, set_dict1))
-    return result
-
 sets = struct(
     difference = _difference,
-    disjunctive_union = _disjunctive_union,
     contains = _contains,
     add = _add,
     add_all = _add_all,
