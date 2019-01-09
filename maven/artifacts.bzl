@@ -12,7 +12,7 @@ _supported_artifact_packaging = _supported_jvm_artifact_packaging
 
 _artifact_template = "{group_path}/{artifact_id}/{version}/{artifact_id}-{version}.{suffix}"
 _artifact_template_with_classifier = "{group_path}/{artifact_id}/{version}/{artifact_id}-{version}-{classifier}.{suffix}"
-
+_artifact_pom_template = "{group_path}/{artifact_id}/{version}/{artifact_id}-{version}.pom"
 
 # Builds a struct containing the basic coordinate elements of a maven artifact spec.
 def _parse_spec(artifact_spec):
@@ -42,12 +42,17 @@ def _parse_spec(artifact_spec):
         version = version,
     )
 
+def _munge_target(artifact_id):
+    return artifact_id.replace("-", "_").replace(".", "_")
+
 # Builds an annotated struct from a more basic artifact struct, with standard paths, names, and other values
 # derived from the basic artifact spec elements.
 def _annotate_artifact(artifact):
+    if not bool(artifact.version):
+        fail("Error, no version specified for %s:%s" % (artifact.group_id, artifact.artifact_id))
     # assemble paths and target names and such.
     group_elements = artifact.group_id.split(".")
-    artifact_id_munged = artifact.artifact_id.replace("-", "_").replace(".", "_")
+    artifact_id_munged = _munge_target(artifact.artifact_id)
     munged_classifier_if_present = (artifact.classifier.split("-") if artifact.classifier else [])
     maven_target_elements = group_elements + [artifact_id_munged] + munged_classifier_if_present
     maven_target_name = "_".join(maven_target_elements)
@@ -58,6 +63,7 @@ def _annotate_artifact(artifact):
             group_path = group_path,
             artifact_id = artifact.artifact_id,
             version = artifact.version,
+            suffix = suffix,
             classifier = artifact.classifier,
         )
     else:
@@ -67,11 +73,17 @@ def _annotate_artifact(artifact):
             version = artifact.version,
             suffix = suffix,
         )
+    pom = _artifact_pom_template.format(
+        group_path = group_path,
+        artifact_id = artifact.artifact_id,
+        version = artifact.version,
+    ) if bool(artifact.version) else None
 
     annotated_artifact = struct(
         maven_target_name = maven_target_name,
         third_party_target_name = artifact_id_munged,
         path = path,
+        pom = pom,
         original_spec = artifact.original_spec,
         group_id = artifact.group_id,
         artifact_id = artifact.artifact_id,
@@ -84,4 +96,5 @@ def _annotate_artifact(artifact):
 artifacts = struct(
     parse_spec = _parse_spec,
     annotate = _annotate_artifact,
+    munge_target = _munge_target,
 )
