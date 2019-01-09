@@ -15,9 +15,13 @@
 #   A repository rule intended to be used in populating @maven_repository.
 #
 load(":sets.bzl", "sets")
+load(":utils.bzl", "strings", "paths")
 load(":artifacts.bzl", "artifacts")
+load(":poms.bzl", "poms")
 
 _DOWNLOAD_PREFIX = "maven"
+_INCLUDED_DEPENDENCY_SCOPES = sets.add_all(sets.new(), ["compile, runtime"])
+_POM_XPATH_DEPENDENCIES_QUERY = """/project/dependencies/dependency[not(scope) or scope/text()="compile"]"""
 
 _ARTIFACT_DOWNLOAD_BUILD_FILE_TEMPLATE = """
 package(default_visibility = ["//visibility:public"])
@@ -65,8 +69,44 @@ load("@{maven_rules_repository}//maven:maven.bzl", "maven_jvm_artifact")
 _MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
     name = "{target}",
     artifact = "{artifact_coordinates}",
+    deps = [{deps}
+    ]
 )
 """
+
+def _get_dependency_fragment(ctx, pom_file):
+    pom_file_no_xmlns = "%s.noxmlns" % pom_file
+    result = ctx.execute(["sed" , "-e", "s/xmlns=/xmlns:ignore=/", pom_file])
+    ctx.file(pom_file_no_xmlns, result.stdout)
+    result = ctx.execute(["xmllint" , pom_file_no_xmlns, "--xpath", _POM_XPATH_DEPENDENCIES_QUERY])
+    if bool(result.stderr):
+        if strings.contains(result.stderr, "empty"):
+            pass # It's ok if we receive an empty result.
+        else:
+            fail("Parsing poms failed for %s with error: %s" % (paths.filename(pom_file), result.stderr))
+    return result.stdout
+
+def _convert_maven_dep(repo_name, artifact):
+    group_path = artifact.group_id.replace(".", "/")
+    if paths.filename(group_path) == artifact.artifact_id:
+        return "@{repo}//{group_path}".format(repo = repo_name, group_path = group_path)
+    else:
+        target = artifacts.munge_target(artifact.artifact_id)
+        return "@{repo}//{group_path}:{target}".format(repo = repo_name, group_path = group_path, target = target)
+
+def _get_dependencies_from_pom_files(ctx, artifact, group_path):
+    pom_urls = ["%s/%s" % (repo, artifact.pom) for repo in ctx.attr.repository_urls]
+    pom_file = "%s/%s-%s.pom" % (group_path, artifact.artifact_id, artifact.version)
+    ctx.download(url = pom_urls, output = pom_file)
+    output = _get_dependency_fragment(ctx, pom_file)
+    tidy_xml = "".join([strings.trim(x) for x in strings.trim(output).splitlines()])
+    maven_deps = poms.extract_dependencies(tidy_xml)
+    return maven_deps
+
+def _deps_string(bazel_deps):
+    bazel_deps = ["""        "%s",""" % x for x in bazel_deps]
+    return "\n%s" % "\n".join(bazel_deps) if bool(bazel_deps) else ""
+
 
 def _generate_maven_repository_impl(ctx):
     # Generate the root WORKSPACE file
@@ -75,6 +115,11 @@ def _generate_maven_repository_impl(ctx):
 
     # Generate the per-group_id BUILD files.
     build_substitutes = ctx.attr.build_substitutes
+    processed_artifacts = sets.new()
+    for specs in ctx.attr.grouped_artifacts.values():
+        artifact_structs = [artifacts.parse_spec(s) for s in specs]
+        sets.add_all(processed_artifacts, ["%s:%s" % (a.group_id, a.artifact_id) for a in artifact_structs])
+    build_files = {}
     for group_id, specs in ctx.attr.grouped_artifacts.items():
         ctx.report_progress("Generating build details for artifacts in %s" % group_id)
         specs = sets.add_all(sets.new(), specs)
@@ -84,24 +129,44 @@ def _generate_maven_repository_impl(ctx):
         group_path = group_id.replace(".", "/")
         for spec in specs:
             artifact = artifacts.annotate(artifacts.parse_spec(spec))
+            coordinates = "%s:%s" % (artifact.group_id, artifact.artifact_id)
+            sets.add(processed_artifacts, coordinates)
+            maven_deps = _get_dependencies_from_pom_files(ctx, artifact, group_path)
+            maven_deps = [x for x in maven_deps if
+                sets.contains(_INCLUDED_DEPENDENCY_SCOPES, x.scope) and not bool(x.systemPath)]
+            found_artifacts = {}
+            bazel_deps = []
+            for dep in maven_deps:
+                found_artifacts[dep.coordinate] = dep
+                bazel_deps += [_convert_maven_dep(ctx.attr.name, dep)]
+            unregistered = sets.difference(sets.add_all(sets.new(), found_artifacts), processed_artifacts)
+            if bool(unregistered) and not bool(build_substitutes.get(coordinates)):
+                unregistered_deps = [poms.format(x) for x in maven_deps if sets.contains(unregistered, x.coordinate)]
+                fail("Some dependencies of %s were not pinned in the artifacts list:\n%s" % (
+                    spec,
+                    list(unregistered_deps),
+                ))
             target_definitions += [
                 build_substitutes.get(
-                    "%s:%s" % (artifact.group_id, artifact.artifact_id),
+                    coordinates,
                     _MAVEN_REPO_TARGET_TEMPLATE.format(
                         target = artifact.third_party_target_name,
+                        deps = _deps_string(bazel_deps),
                         artifact_coordinates = artifact.original_spec,
                     )
                 )
             ]
-        ctx.file(
-            "%s/BUILD" % group_path,
-            "\n".join([prefix] + target_definitions),
-        )
+        file = "%s/BUILD" % group_path
+        content = "\n".join([prefix] + target_definitions)
+        ctx.file(file, content)
+        # build_files[build_file] = build_content
+
 
 _generate_maven_repository = repository_rule(
     implementation = _generate_maven_repository_impl,
     attrs = {
         "grouped_artifacts": attr.string_list_dict(mandatory = True),
+        "repository_urls": attr.string_list(mandatory = True),
         "maven_rules_repository": attr.string(mandatory = False, default = "maven_repository_rules"),
         "build_substitutes": attr.string_dict(mandatory = True),
     },
@@ -192,6 +257,7 @@ def _maven_repository_specification(
     _generate_maven_repository(
         name = name,
         grouped_artifacts = grouped_artifacts,
+        repository_urls = repository_urls,
         build_substitutes = build_substitutes,
     )
 

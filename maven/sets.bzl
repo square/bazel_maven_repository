@@ -15,11 +15,17 @@ def _add(set_dict, item):
     set_dict[item] = _EMPTY
     return set_dict
 
-
 def _add_all(set_dict, items):
     """Adds all items to the set and returns the set"""
-    for item in items:
-        _add(set_dict, item)
+    item_type = type(items)
+    if item_type == type({}):
+        for item in items.keys():
+            _add(set_dict, item)
+    elif item_type == type([]):
+        for item in items:
+            _add(set_dict, item)
+    else:
+        fail("Error, invalid %s argument passed to set operation." % item_type)
     return set_dict
 
 def _pop(set_dict):
@@ -31,8 +37,12 @@ def _new():
     """Creates a new set.  Not strictly necessary, since a dict can be passed, but it's more """
     return {}
 
+def _difference(set_dict1, set_dict2):
+    """Returns the elements that reflect the set difference (items in set_dict2 that are not in set_dict1)"""
+    return sets.add_all(sets.new(), [x for x in set_dict1 if not sets.contains(set_dict2, x)])
 
 sets = struct(
+    difference = _difference,
     contains = _contains,
     add = _add,
     add_all = _add_all,

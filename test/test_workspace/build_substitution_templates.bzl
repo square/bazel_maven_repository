@@ -18,46 +18,101 @@
 #   maven_repository_specification(
 #       ...
 #       build_substitutes = {
-#           "com.google.dagger:dagger": DAGGER_PLUGIN_BUILD_SUBSTITUTE.format(dagger_version = "2.20", repo = "maven"),
+#           "com.google.dagger:dagger": DAGGER_BUILD_SUBSTITUTE_WITH_PLUGIN.format(dagger_version = "2.20"),
 #       }
 #   )
 #
-# Note:
-#   This set of internal dependencies is valid as of dagger 2.20. Other versions may require different deps.
-#
-DAGGER_PLUGIN_BUILD_SUBSTITUTE = """
+DAGGER_BUILD_SUBSTITUTE_WITH_PLUGIN = """
 java_library(
-    name = "dagger",
-    exports = [
-        ":dagger_api",
-        "@maven//javax/inject:javax_inject",
-    ],
-    exported_plugins = [":dagger_plugin"],
-    visibility = ["//visibility:public"],
+   name = "dagger",
+   exports = [
+       ":dagger_api",
+       "@maven//javax/inject:javax_inject",
+   ],
+   exported_plugins = [":dagger_plugin"],
+   visibility = ["//visibility:public"],
 )
 
 maven_jvm_artifact(
-    name = "dagger_api",
-    artifact = "com.google.dagger:dagger:{dagger_version}",
+   name = "dagger_api",
+   artifact = "com.google.dagger:dagger:{dagger_version}",
 )
 
 java_plugin(
-    name = "dagger_plugin",
-    processor_class = "dagger.internal.codegen.ComponentProcessor",
-    generates_api = True,
+   name = "dagger_plugin",
+   processor_class = "dagger.internal.codegen.ComponentProcessor",
+   generates_api = True,
+   deps = [":dagger_compiler"],
+)
+"""
+
+# Description:
+#   Replaces the naive dagger-compiler BUILD file, because we rewrite dagger -> dagger_api above, and the naive deps
+#   list for dagger-compiler would result in a build cycle (since it would depend on :dagger).
+#
+DAGGER_COMPILER_BUILD_SUBSTITUTE = """
+maven_jvm_artifact(
+    name = "dagger_compiler",
+    artifact = "com.google.dagger:dagger-compiler:{dagger_version}",
     deps = [
         ":dagger_api",
-        ":dagger_compiler",
         ":dagger_producers",
         ":dagger_spi",
-        "@{repo}//com/google/code/findbugs:jsr305",
-        "@{repo}//com/google/errorprone:javac_shaded",
-        "@{repo}//com/google/googlejavaformat:google_java_format",
-        "@{repo}//com/google/guava",
-        "@{repo}//com/squareup:javapoet",
-        "@{repo}//org/checkerframework:checker_compat_qual",
-        "@{repo}//javax/annotation:jsr250_api",
-        "@{repo}//javax/inject:javax_inject",
+        "@maven//com/google/googlejavaformat:google_java_format",
+        "@maven//com/google/guava:guava",
+        "@maven//com/squareup:javapoet",
+        "@maven//javax/annotation:jsr250_api",
+        "@maven//javax/inject:javax_inject",
+    ]
+)
+"""
+
+# Description:
+#   Replaces the naive dagger-producers BUILD file, because we rewrite dagger -> dagger_api above, and the naive deps
+#   list for dagger-producers would result in a build cycle (since it would depend on :dagger).
+#
+DAGGER_PRODUCERS_BUILD_SUBSTITUTE = """
+maven_jvm_artifact(
+    name = "dagger_producers",
+    artifact = "com.google.dagger:dagger-producers:{dagger_version}",
+    deps = [
+        ":dagger_api",
+        "@maven//com/google/guava:guava",
+        "@maven//javax/inject:javax_inject",
+        "@maven//org/checkerframework:checker_compat_qual",
+    ]
+)
+"""
+
+# Description:
+#   Replaces the naive dagger-producers BUILD file, because we rewrite dagger -> dagger_api above, and the naive deps
+#   list for dagger-producers would result in a build cycle (since it would depend on :dagger).
+#
+DAGGER_SPI_BUILD_SUBSTITUTE = """
+maven_jvm_artifact(
+    name = "dagger_spi",
+    artifact = "com.google.dagger:dagger-spi:{dagger_version}",
+    deps = [
+        ":dagger_api",
+        ":dagger_producers",
+        "@maven//com/google/guava:guava",
+        "@maven//javax/inject:javax_inject",
+    ]
+)
+"""
+
+# Description:
+#   Substitute this since the naive reading of the .pom doesn't properly list some dependencies as test-only.
+#   This shouldn't be necessary once property-substitution and parent-pom integration are supported.
+GOOGLE_JAVA_FORMAT_BUILD_SUBSTITUTE = """
+maven_jvm_artifact(
+    name = "google_java_format",
+    artifact = "com.google.googlejavaformat:google-java-format:1.6",
+    deps = [
+        "@maven//com/google/guava",
+        "@maven//com/google/errorprone:javac_shaded",
+        "@maven//com/google/code/findbugs:jsr305",
+        "@maven//com/google/errorprone:error_prone_annotations",
     ],
 )
 """
