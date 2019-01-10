@@ -39,7 +39,6 @@ def _encode_nested(dict):
         for nested_key, nested_value in nested_dict.items():
             nested_encoded_list += ["%s%s%s" % (nested_key, _DICT_ENCODING_SEPARATOR, nested_value)]
         result[key] = nested_encoded_list
-    print("Encoded %s as %s" % (dict, result))
     return result
 
 # Decodes a dict(string->list(string)) into a dict(string->dict(string->string)) by splitting the nested string using
@@ -56,7 +55,6 @@ def _decode_nested(dict):
             nested_key, nested_value = encoded_item.split(_DICT_ENCODING_SEPARATOR)
             nested_dict[nested_key] = nested_value
         result[key] = nested_dict
-    print("Decoded %s as %s" % (dict, result))
     return result
 
 dicts = struct(
