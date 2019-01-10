@@ -94,11 +94,7 @@ def _normalize_target(full_target_spec, current_package, target_substitutions):
     local_package = full_package.split("//")[1] # @maven//blah/foo -> blah/foo
     if local_package == current_package:
         return ":%s" % target # Trim to a local reference.
-    else:
-        if paths.filename(full_package) == target:
-            return full_package
-        else:
-            return full_target_spec
+    return full_package if paths.filename(full_package) == target else full_target_spec
 
 def _get_dependencies_from_pom_files(ctx, artifact, group_path):
     pom_urls = ["%s/%s" % (repo, artifact.pom) for repo in ctx.attr.repository_urls]

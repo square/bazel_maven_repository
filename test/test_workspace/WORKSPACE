@@ -35,7 +35,7 @@ maven_repository_specification(
         "com.google.guava:guava:25.0-jre": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9",
     },
     dependency_target_substitutes = {
-        # Because we rewrite dagger -> dagger_spi (and make a wrapper target "dagger" that exports the dagger
+        # Because we rewrite dagger -> dagger_api (and make a wrapper target "dagger" that exports the dagger
         # annotation processor) we need to rewrite the internal dependencies inside the com/google/dagger package
         # to reflect this.
         # "groupId": { "full bazel target": "full alternate target" }
