@@ -15,7 +15,7 @@
 #   A repository rule intended to be used in populating @maven_repository.
 #
 load(":sets.bzl", "sets")
-load(":utils.bzl", "strings", "paths")
+load(":utils.bzl", "strings", "paths", "dicts")
 load(":artifacts.bzl", "artifacts")
 load(":poms.bzl", "poms")
 
@@ -69,11 +69,8 @@ load("@{maven_rules_repository}//maven:maven.bzl", "maven_jvm_artifact")
 _MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
     name = "{target}",
     artifact = "{artifact_coordinates}",
-    deps = [{deps}
-    ]
-)
+{deps})
 """
-
 def _get_dependency_fragment(ctx, pom_file):
     pom_file_no_xmlns = "%s.noxmlns" % pom_file
     result = ctx.execute(["sed" , "-e", "s/xmlns=/xmlns:ignore=/", pom_file])
@@ -88,11 +85,16 @@ def _get_dependency_fragment(ctx, pom_file):
 
 def _convert_maven_dep(repo_name, artifact):
     group_path = artifact.group_id.replace(".", "/")
-    if paths.filename(group_path) == artifact.artifact_id:
-        return "@{repo}//{group_path}".format(repo = repo_name, group_path = group_path)
-    else:
-        target = artifacts.munge_target(artifact.artifact_id)
-        return "@{repo}//{group_path}:{target}".format(repo = repo_name, group_path = group_path, target = target)
+    target = artifacts.munge_target(artifact.artifact_id)
+    return "@{repo}//{group_path}:{target}".format(repo = repo_name, group_path = group_path, target = target)
+
+def _normalize_target(full_target_spec, current_package, target_substitutions):
+    full_target_spec = target_substitutions.get(full_target_spec, full_target_spec)
+    full_package, target = full_target_spec.split(":")
+    local_package = full_package.split("//")[1] # @maven//blah/foo -> blah/foo
+    if local_package == current_package:
+        return ":%s" % target # Trim to a local reference.
+    return full_package if paths.filename(full_package) == target else full_target_spec
 
 def _get_dependencies_from_pom_files(ctx, artifact, group_path):
     pom_urls = ["%s/%s" % (repo, artifact.pom) for repo in ctx.attr.repository_urls]
@@ -104,9 +106,10 @@ def _get_dependencies_from_pom_files(ctx, artifact, group_path):
     return maven_deps
 
 def _deps_string(bazel_deps):
+    if not bool(bazel_deps):
+        return ""
     bazel_deps = ["""        "%s",""" % x for x in bazel_deps]
-    return "\n%s" % "\n".join(bazel_deps) if bool(bazel_deps) else ""
-
+    return "    deps = [\n%s\n    ]\n" % "\n".join(bazel_deps) if bool(bazel_deps) else ""
 
 def _generate_maven_repository_impl(ctx):
     # Generate the root WORKSPACE file
@@ -115,12 +118,14 @@ def _generate_maven_repository_impl(ctx):
 
     # Generate the per-group_id BUILD files.
     build_substitutes = ctx.attr.build_substitutes
+    target_substitutes = dicts.decode_nested(ctx.attr.dependency_target_substitutes)
     processed_artifacts = sets.new()
     for specs in ctx.attr.grouped_artifacts.values():
         artifact_structs = [artifacts.parse_spec(s) for s in specs]
         sets.add_all(processed_artifacts, ["%s:%s" % (a.group_id, a.artifact_id) for a in artifact_structs])
     build_files = {}
     for group_id, specs in ctx.attr.grouped_artifacts.items():
+        package_target_substitutes = target_substitutes.get(group_id, {})
         ctx.report_progress("Generating build details for artifacts in %s" % group_id)
         specs = sets.add_all(sets.new(), specs)
         prefix = _MAVEN_REPO_BUILD_PREFIX.format(
@@ -139,6 +144,7 @@ def _generate_maven_repository_impl(ctx):
             for dep in maven_deps:
                 found_artifacts[dep.coordinate] = dep
                 bazel_deps += [_convert_maven_dep(ctx.attr.name, dep)]
+            normalized_deps = [_normalize_target(x, group_path, package_target_substitutes) for x in bazel_deps]
             unregistered = sets.difference(sets.add_all(sets.new(), found_artifacts), processed_artifacts)
             if bool(unregistered) and not bool(build_substitutes.get(coordinates)):
                 unregistered_deps = [poms.format(x) for x in maven_deps if sets.contains(unregistered, x.coordinate)]
@@ -151,7 +157,7 @@ def _generate_maven_repository_impl(ctx):
                     coordinates,
                     _MAVEN_REPO_TARGET_TEMPLATE.format(
                         target = artifact.third_party_target_name,
-                        deps = _deps_string(bazel_deps),
+                        deps = _deps_string(normalized_deps),
                         artifact_coordinates = artifact.original_spec,
                     )
                 )
@@ -168,6 +174,7 @@ _generate_maven_repository = repository_rule(
         "grouped_artifacts": attr.string_list_dict(mandatory = True),
         "repository_urls": attr.string_list(mandatory = True),
         "maven_rules_repository": attr.string(mandatory = False, default = "maven_repository_rules"),
+        "dependency_target_substitutes": attr.string_list_dict(mandatory = True),
         "build_substitutes": attr.string_dict(mandatory = True),
     },
 )
@@ -226,6 +233,7 @@ def _maven_repository_specification(
         artifact_specs = {},
         insecure_artifacts = [],
         build_substitutes = {},
+        dependency_target_substitutes = {},
         repository_urls = ["https://repo1.maven.org/maven2"]):
 
     _validate_no_insecure_artifacts(artifact_specs)
@@ -254,10 +262,16 @@ def _maven_repository_specification(
             local_path = artifact.path,
             sha256 = sha256,
         )
+
+    # Skylark rules can't take in arbitrarily deep dicts, so we rewrite dict(string->dict(string, string)) to an
+    # encoded (but trivially splittable) dict(string->list(string)).  Yes it's gross.
+    dependency_target_substitutes_rewritten = dicts.encode_nested(dependency_target_substitutes)
+
     _generate_maven_repository(
         name = name,
         grouped_artifacts = grouped_artifacts,
         repository_urls = repository_urls,
+        dependency_target_substitutes = dependency_target_substitutes_rewritten,
         build_substitutes = build_substitutes,
     )
 
@@ -282,11 +296,26 @@ def maven_jvm_artifact(artifact, name = None, deps = [], exports = [], visibilit
 #   generated `maven_jvm_artifact()` rule.
 #
 def maven_repository_specification(
+        # The name of the repository
         name,
+
+        # The dictionary of artifact:sha256 entries used to populate this repository
         artifacts = {},
+
+        # The list of artifacts (without sha256 hashes) that will be used without file hash checking.
         insecure_artifacts = [],
+
+        # The dictionary of build-file substitutions (per-target) which will replace the auto-generated target
+        # statements in the generated repository
         build_substitutes = {},
+
+        # The dictionary of per-group target substitutions.  These must be in the format:
+        # "@myreponame//path/to/package:target": "@myrepotarget//path/to/package:alternate"
+        dependency_target_substitutes = {},
+
+        # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
         repository_urls = ["https://repo1.maven.org/maven2"]):
+
     # Redirected to _maven_repository_specification to allow the public parameter "artifacts" without conflicting
     # with the artifact utility struct.
     _maven_repository_specification(
@@ -294,5 +323,6 @@ def maven_repository_specification(
         artifact_specs = artifacts,
         insecure_artifacts = insecure_artifacts,
         build_substitutes = build_substitutes,
+        dependency_target_substitutes = dependency_target_substitutes,
         repository_urls = repository_urls,
     )
