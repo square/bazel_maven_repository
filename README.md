@@ -3,12 +3,12 @@
 A bazel ruleset creating a more idiomatic bazel representation of a maven repo using a
 pinned list of artifacts.
 
-Release: `0.2 (Beta)`
+Release: `0.3 (Beta 2)`
 
 | Link | Sha |
 | ---- | --- |
-| [Zip File](https://github.com/israfil/bazel_maven_repository/archive/0.2.zip) | `aeb31a44ee8bbd02bf88b2dd96e64f48934f8f3301032d1de2c0f5137a0c713b` |
-| [Tarball](https://github.com/israfil/bazel_maven_repository/archive/0.2.tar.gz) | `34de730e8ff83252bd30e5933952ec7f0616bab6bd3b31f949f1c9465529fe55` |
+| [Zip File](https://github.com/israfil/bazel_maven_repository/archive/0.3.zip) | `71c1e7432456808784cf8c42b842e618fbec4d2189d93d282a6d60b1e4422cc1` |
+| [Tarball](https://github.com/israfil/bazel_maven_repository/archive/0.3.tar.gz) | `fe3150559d85940a394ca2aa2c56f9ebd28b1cd23aa43107f0a1ed9e4508ab48` |
 
 
 ## Overview
