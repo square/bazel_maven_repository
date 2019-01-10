@@ -46,6 +46,20 @@ maven_repository_specification(
 Dependency versions are resolved in the single artifact list.  Only one version is permitted within
 a repository.
 
+## Inter-artifact dependencies
+
+This rule will, in the generated repository, infer inter-artifact dependencies from pom.xml files
+of those artifacts (pulling in only `compile` and `runtime` dependencies, and avoiding any `systemPath`
+dependencies).  This avoids the bazel user having to over-specify the full set of dependency jars.
+
+All artifacts, even transitively depended-on ones, need to be specified with pinned versions in the
+`artifacts` property, and any artifacts discovered in the inferred dependency search, which are not
+present in the main rule's artifact list will be flagged and the build will fail with an error listing
+them.
+
+> Note: This currently doesn't support inherited or implicit version numbers, which is a forthcoming
+> feature.
+
 ## Coordinate Translation
 
 Translation from maven group/artifact coordinates to bazel package/target coordinates is naive but
@@ -107,7 +121,8 @@ off-line validation that the SHA hashes are the properly published hashes.
 One can provide a `BUILD.bazel file snippet` that will be substituted for the auto-generated target
 implied by a maven artifact.  This is very useful for providing an annotation-processor-exporting
 alternative target.  The substitution is naive, so the string needs to be appropriate and any rules
-need to be correct, contain the right dependencies, etc. 
+need to be correct, contain the right dependencies, etc.  To aid that it's also possible to (on a
+per-package basis) substitute dependencies on a given fully-qualified bazel target for another. 
 
 
 A simple use-case would be to substitute a target name (e.g. "mockito-core" -> "mockito") for
@@ -156,17 +171,17 @@ java_plugin(
     name = "dagger_plugin",
     processor_class = "dagger.internal.codegen.ComponentProcessor",
     generates_api = True,
-    deps = [
-        ":dagger_api", # imported above
-        ":dagger_compiler", # auto-generated into the same package
-        ":dagger_producers", # auto-generated into the same package
-        ":dagger_spi", # auto-generated into the same package
-        "@maven//com/google/code/findbugs:jsr305",
-        # ... all the other deps of dagger_compiler
-    ],
+    deps = [":dagger_compiler"],
 )
 """
+```
 
+The above is given as a substitution in the `maven_repository_specification()` rule.  However, since the inferred
+dependencies of `:dagger-compiler` would create a dependency cycle because it includes `:dagger` as a dep, the
+specification rule also should include a dependency_target_substitution, to ensures that the inferred rules in
+the generated `com/google/dagger/BUILD` file consume `:dagger_api` instead of the wrapper replacement target.
+
+```python
 maven_repository_specification(
     name = "maven",
     insecure_artifacts = [
@@ -179,13 +194,12 @@ maven_repository_specification(
     ],
     build_substitutes = {
         "com.google.dagger:dagger": DAGGER_PROCESSOR_SNIPPET,
+    },
+    dependency_target_substitutes = {
+        "com.google.dagger": {"@maven//com/google/dagger:dagger": "@maven//com/google/dagger:dagger_api"},
     }
 )
 ```
-
-> Note: This won't build as-stated, because it's missing the extra deps dagger-compiler requires.  A more full
-> (working) example can be found in [test/test_workspace/WORKSPACE](test/test_workspace/WORKSPACE).  The
-> above is to illustrate the pattern.
 
 Thereafter, any target with a dependency on (in this example) `@maven//com/google/dagger` will invoke annotation
 processing and generate any dagger-generated code.  The same pattern could be used for
@@ -212,10 +226,8 @@ Classifiers are tacked on the end, e.g. `"foo.bar:blah:1.0:jar:some-classifier"`
  
 ## Limitations
 
-This doesn't recreate the dependencies between maven artifacts within the generated bazel rules.
-Future versions may support this, as well as validation that your artifact list is complete to
-satisfy all its dependencies.  For now, the generated bazel targets will not include any transitive
-dependency closure (unless replaced by a substitution snippet).
+This doesn't support parent-inherited metadata, nor versions obtained from `<properties>` or
+`<dependencyManagement> sections` at this point.  This may be added in future releases.
 
 ## Other Usage Notes
 
