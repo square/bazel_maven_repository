@@ -43,17 +43,18 @@ def _parse_fragment(deps_fragment):
         elif key == "systemPath":
             systemPath = token
 
-    return struct(
+    dependency_struct = struct(
         group_id = group_id,
         artifact_id = artifact_id,
         version = version,
-        type = "jar",
-        optional = False,
-        scope = "compile",
-        classifier = None,
-        system_path = None,
+        type = type,
+        optional = optional,
+        scope = scope,
+        classifier = classifier,
+        system_path = system_path,
         coordinate = "%s:%s" % (group_id, artifact_id)
     )
+    return dependency_struct
 
 def _parse_fragments(deps_fragments):
     deps = []

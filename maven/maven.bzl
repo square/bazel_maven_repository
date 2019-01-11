@@ -20,7 +20,7 @@ load(":artifacts.bzl", "artifacts")
 load(":poms.bzl", "poms")
 
 _DOWNLOAD_PREFIX = "maven"
-_INCLUDED_DEPENDENCY_SCOPES = sets.add_all(sets.new(), ["compile", "runtime"])
+_RUNTIME_DEPENDENCY_SCOPES = sets.add_all(sets.new(), ["compile", "runtime"])
 _POM_XPATH_DEPENDENCIES_QUERY = """/project/dependencies/dependency[not(scope) or scope/text()="compile"]"""
 
 _ARTIFACT_DOWNLOAD_BUILD_FILE_TEMPLATE = """
@@ -111,6 +111,12 @@ def _deps_string(bazel_deps):
     bazel_deps = ["""        "%s",""" % x for x in bazel_deps]
     return "    deps = [\n%s\n    ]\n" % "\n".join(bazel_deps) if bool(bazel_deps) else ""
 
+def _should_include_dependency(dep):
+    return (sets.contains(_RUNTIME_DEPENDENCY_SCOPES, dep.scope)
+        and not bool(dep.system_path)
+        and not dep.optional
+    )
+
 def _generate_maven_repository_impl(ctx):
     # Generate the root WORKSPACE file
     repository_root_path = ctx.path(".")
@@ -137,8 +143,7 @@ def _generate_maven_repository_impl(ctx):
             coordinates = "%s:%s" % (artifact.group_id, artifact.artifact_id)
             sets.add(processed_artifacts, coordinates)
             maven_deps = _get_dependencies_from_pom_files(ctx, artifact, group_path)
-            maven_deps = [x for x in maven_deps if
-                sets.contains(_INCLUDED_DEPENDENCY_SCOPES, x.scope) and not bool(x.system_path)]
+            maven_deps = [x for x in maven_deps if _should_include_dependency(x)]
             found_artifacts = {}
             bazel_deps = []
             for dep in maven_deps:
