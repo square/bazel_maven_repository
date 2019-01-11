@@ -1,0 +1,4 @@
+load(":all_tests.bzl", "all_tests")
+
+# Separated into another package to avoid dragging the test code into the analysis phase via //maven:BUILD
+all_tests(name = "all_tests")
