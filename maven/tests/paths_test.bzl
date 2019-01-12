@@ -10,4 +10,4 @@ def filename_test(env):
 
 # Roll-up function.
 def paths_test_suite():
-    test_suite("paths", tests = [filename_test])
+    test_suite("paths", tests = [filename_test]
