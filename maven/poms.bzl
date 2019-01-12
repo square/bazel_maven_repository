@@ -89,13 +89,6 @@ def _format(dep):
             result = "%s:%s" % (result, dep.type)
     return result
 
-for_testing = struct(
-    extract_dependencies = _extract_dependencies,
-    format = _format,
-    parse_dependencies = _parse_dependencies,
-    parse_dependency = _parse_dependency,
-)
-
 poms = struct(
     extract_dependencies = _extract_dependencies,
     format = _format,
