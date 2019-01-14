@@ -5,4 +5,4 @@ all_tests(name = "all_tests")
 
 # A test to make sure that there is _some_ formal test rule, since all_tests is technically not a build rule (to
 # avoid complexities in the test writing)
-sh_test(name = "noop_test", srcs = ["noop.sh"], data = [":all_tests"])
+sh_test(name = "noop_test", srcs = ["noop.sh"], data = [":all_tests"], size = "small")
