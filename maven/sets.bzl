@@ -8,9 +8,9 @@ _UNDEFINED = "__UNDEFINED__"
 _EMPTY = "__EMPTY__"  # Check when changing this to keep in sync with sets.bzl
 _SET_DICTIONARY_KEY = "_____SET_DICTIONARY_KEY______"
 
-def _contains(set_dict, item):
+def _contains(set, item):
     """Returns true if the set contains the supplied item"""
-    return not (set_dict.get(item, _UNDEFINED) == _UNDEFINED)
+    return not (set.get(item, _UNDEFINED) == _UNDEFINED)
 
 def _add(set, item):
     """Adds an item to the set and returns the set"""

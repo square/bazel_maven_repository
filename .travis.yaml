@@ -15,4 +15,4 @@ before_install:
 
 script:
   - bazel test //maven/...
-  - 
+  -
