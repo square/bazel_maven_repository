@@ -1,5 +1,7 @@
 dist: trusty
 
+language: generic
+
 addons:
   apt:
     sources:
@@ -15,4 +17,3 @@ before_install:
 
 script:
   - bazel test //maven/...
-  -
