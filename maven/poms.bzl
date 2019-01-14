@@ -6,7 +6,7 @@ load(":utils.bzl", "strings")
 
 _maven_dep_properties = ["artifactId", "groupId", "version", "type", "scope", "optional", "classifier", "systemPath"]
 
-def _parse_fragment(deps_fragment):
+def _parse_dependency(deps_fragment):
     for property in _maven_dep_properties:
         deps_fragment = deps_fragment.replace("</%s>" % property, "::")
         deps_fragment = deps_fragment.replace("<%s>" % property, "%s:" % property)
@@ -20,6 +20,7 @@ def _parse_fragment(deps_fragment):
     system_path = None
 
     for fragment_element in deps_fragment.split("::"):
+        fragment_element = strings.trim(fragment_element)
         if not bool(fragment_element):
             continue
         key, token = fragment_element.split(":")
@@ -41,7 +42,7 @@ def _parse_fragment(deps_fragment):
         elif key == "optional":
             optional = bool(token)
         elif key == "systemPath":
-            systemPath = token
+            system_path = token
 
     dependency_struct = struct(
         group_id = group_id,
@@ -56,14 +57,15 @@ def _parse_fragment(deps_fragment):
     )
     return dependency_struct
 
-def _parse_fragments(deps_fragments):
+def _parse_dependencies(deps_fragments):
     deps = []
     for deps_fragment in deps_fragments:
-        deps += [_parse_fragment(deps_fragment)]
+        deps += [_parse_dependency(deps_fragment)]
     return deps
 
 # extracts dependency coordinates from a given <dependency> section of a pom file.  This only handles
 # a repeated set of <dependency> sections, without a parent element.
+# TODO(cgruber) move some of the checking of the internal shape into _parse_dependency, and make this a real parser.
 def _extract_dependencies(xml_fragment):
     if not bool(xml_fragment):
         return []
@@ -74,7 +76,7 @@ def _extract_dependencies(xml_fragment):
     else:
         fail("Invalid maven dependency xml fragment.  Please file an issue: %s" % xml_fragment)
     deps_fragments = xml_fragment.split("</dependency><dependency>")
-    deps = _parse_fragments(deps_fragments)
+    deps = _parse_dependencies(deps_fragments)
     return deps
 
 def _format(dep):

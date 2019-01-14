@@ -34,11 +34,14 @@ paths = struct(
 # This function only handles one level of depth, and only handles string keys and values.
 def _encode_nested(dict):
     result = {}
-    for key, nested_dict in dict.items():
-        nested_encoded_list = []
-        for nested_key, nested_value in nested_dict.items():
-            nested_encoded_list += ["%s%s%s" % (nested_key, _DICT_ENCODING_SEPARATOR, nested_value)]
-        result[key] = nested_encoded_list
+    for key, value in dict.items():
+        if type(value) == type({}):
+            nested_encoded_list = []
+            for nested_key, nested_value in value.items():
+                nested_encoded_list += ["%s%s%s" % (nested_key, _DICT_ENCODING_SEPARATOR, nested_value)]
+            result[key] = nested_encoded_list
+        else:
+            result[key] = value
     return result
 
 # Decodes a dict(string->list(string)) into a dict(string->dict(string->string)) by splitting the nested string using

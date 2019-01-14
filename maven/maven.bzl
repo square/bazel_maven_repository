@@ -150,7 +150,7 @@ def _generate_maven_repository_impl(ctx):
                 found_artifacts[dep.coordinate] = dep
                 bazel_deps += [_convert_maven_dep(ctx.attr.name, dep)]
             normalized_deps = [_normalize_target(x, group_path, package_target_substitutes) for x in bazel_deps]
-            unregistered = sets.difference(sets.add_all(sets.new(), found_artifacts), processed_artifacts)
+            unregistered = sets.difference(processed_artifacts, sets.add_all(sets.new(), found_artifacts))
             if bool(unregistered) and not bool(build_substitutes.get(coordinates)):
                 unregistered_deps = [poms.format(x) for x in maven_deps if sets.contains(unregistered, x.coordinate)]
                 fail("Some dependencies of %s were not pinned in the artifacts list:\n%s" % (
