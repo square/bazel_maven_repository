@@ -5,7 +5,6 @@
 
 _DICT_ENCODING_SEPARATOR = ">>>"
 
-
 # Performs a typical "trim()" operation on a string, eliminating whitespace (or optionally supplied characters) from
 # the front and back of the string.
 def _trim(string, characters = "\n "):
@@ -26,7 +25,6 @@ def _filename(string):
 paths = struct(
     filename = _filename
 )
-
 
 # Encodes a dict(string->dict(string->string)) into a dict(string->list(string)) with the string encoded so it can
 # be split and restored in decode_nested.  Skylark rules can't take in arbitrarily deep dict nesting.

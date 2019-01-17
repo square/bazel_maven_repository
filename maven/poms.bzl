@@ -3,13 +3,11 @@
 #   Utilities for extracting information from pom files.
 #
 load(":utils.bzl", "strings")
+load(":xml.bzl", "xml")
 
 _maven_dep_properties = ["artifactId", "groupId", "version", "type", "scope", "optional", "classifier", "systemPath"]
 
-def _parse_dependency(deps_fragment):
-    for property in _maven_dep_properties:
-        deps_fragment = deps_fragment.replace("</%s>" % property, "::")
-        deps_fragment = deps_fragment.replace("<%s>" % property, "%s:" % property)
+def _process_dependency(dep_node):
     group_id = None
     artifact_id = None
     version = "INFERRED"
@@ -19,32 +17,26 @@ def _parse_dependency(deps_fragment):
     classifier = None
     system_path = None
 
-    for fragment_element in deps_fragment.split("::"):
-        fragment_element = strings.trim(fragment_element)
-        if not bool(fragment_element):
-            continue
-        key, token = fragment_element.split(":")
-        if strings.contains(token, "$"):
-            token = "INFERRED" # TODO(cgruber) handle property substitution.
-            # _substitute_variable(string, variable_key, value)
-        if key == "groupId":
-            group_id = token
-        elif key == "artifactId":
-            artifact_id = token
-        elif key == "version":
-            version = token
-        elif key == "classifier":
-            classifier = token
-        elif key == "type":
-            type = token
-        elif key == "scope":
-            scope = token
-        elif key == "optional":
-            optional = bool(token)
-        elif key == "systemPath":
-            system_path = token
+    for c in dep_node.children:
+        if c.label == "groupId":
+            group_id = c.content
+        elif c.label == "artifactId":
+            artifact_id = c.content
+        elif c.label == "version":
+            # TODO(cgruber) handle property substitution.
+            version = "INFERRED" if strings.contains(c.content, "$") else c.content
+        elif c.label == "classifier":
+            classifier = c.content
+        elif c.label == "type":
+            type = c.content
+        elif c.label == "scope":
+            scope = c.content
+        elif c.label == "optional":
+            optional = bool(c.content)
+        elif c.label == "systemPath":
+            system_path = c.content
 
-    dependency_struct = struct(
+    return struct(
         group_id = group_id,
         artifact_id = artifact_id,
         version = version,
@@ -55,31 +47,17 @@ def _parse_dependency(deps_fragment):
         system_path = system_path,
         coordinate = "%s:%s" % (group_id, artifact_id)
     )
-    return dependency_struct
 
-def _parse_dependencies(deps_fragments):
-    deps = []
-    for deps_fragment in deps_fragments:
-        deps += [_parse_dependency(deps_fragment)]
-    return deps
+# Extracts dependency coordinates from a given <dependencies> node of a pom node.  The parameter should be the project
+# node of a parsed xml document tree, returned by poms.parse(xml_text)
+def _extract_dependencies(project):
+    dependencies = []
+    for node in project.children:
+        if node.label == "dependencies":
+            dependencies = node.children
+    return [_process_dependency(x) for x in dependencies]
 
-# extracts dependency coordinates from a given <dependency> section of a pom file.  This only handles
-# a repeated set of <dependency> sections, without a parent element.
-# TODO(cgruber) move some of the checking of the internal shape into _parse_dependency, and make this a real parser.
-def _extract_dependencies(xml_fragment):
-    if not bool(xml_fragment):
-        return []
-
-    # Trim start and end elements.
-    if xml_fragment.startswith("<dependency>"):
-        xml_fragment = xml_fragment[len("<dependency>"):-len("</dependency>")]
-    else:
-        fail("Invalid maven dependency xml fragment.  Please file an issue: %s" % xml_fragment)
-    deps_fragments = xml_fragment.split("</dependency><dependency>")
-    deps = _parse_dependencies(deps_fragments)
-    return deps
-
-def _format(dep):
+def _format_dependency(dep):
     result = "%s:%s:%s" % (dep.group_id, dep.artifact_id, dep.version)
     if bool(dep.classifier):
         type = dep.type if bool(dep.type) else "jar"
@@ -89,7 +67,16 @@ def _format(dep):
             result = "%s:%s" % (result, dep.type)
     return result
 
+def _parse(xml_text):
+    root = xml.parse(xml_text)
+    for node in root.children:
+        if node.label == "project":
+            return node
+    fail("No <project> tag found in supplied xml: %s" % xml)
+
+
 poms = struct(
+    parse = _parse,
     extract_dependencies = _extract_dependencies,
-    format = _format,
+    format_dependency = _format_dependency,
 )

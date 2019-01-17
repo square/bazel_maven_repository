@@ -71,17 +71,6 @@ _MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
     artifact = "{artifact_coordinates}",
 {deps})
 """
-def _get_dependency_fragment(ctx, pom_file):
-    pom_file_no_xmlns = "%s.noxmlns" % pom_file
-    result = ctx.execute(["sed" , "-e", "s/xmlns=/xmlns:ignore=/", pom_file])
-    ctx.file(pom_file_no_xmlns, result.stdout)
-    result = ctx.execute(["xmllint" , pom_file_no_xmlns, "--xpath", _POM_XPATH_DEPENDENCIES_QUERY])
-    if bool(result.stderr):
-        if strings.contains(result.stderr, "empty"):
-            pass # It's ok if we receive an empty result.
-        else:
-            fail("Parsing poms failed for %s with error: %s" % (paths.filename(pom_file), result.stderr))
-    return result.stdout
 
 def _convert_maven_dep(repo_name, artifact):
     group_path = artifact.group_id.replace(".", "/")
@@ -100,9 +89,12 @@ def _get_dependencies_from_pom_files(ctx, artifact, group_path):
     pom_urls = ["%s/%s" % (repo, artifact.pom) for repo in ctx.attr.repository_urls]
     pom_file = "%s/%s-%s.pom" % (group_path, artifact.artifact_id, artifact.version)
     ctx.download(url = pom_urls, output = pom_file)
-    output = _get_dependency_fragment(ctx, pom_file)
-    tidy_xml = "".join([strings.trim(x) for x in strings.trim(output).splitlines()])
-    maven_deps = poms.extract_dependencies(tidy_xml)
+    result = ctx.execute(["cat" , pom_file])
+    if result.return_code:
+        fail("Error reading pom file %s (return code %s)", (pom_file, result.return_code))
+
+    project = poms.parse(result.stdout)
+    maven_deps = poms.extract_dependencies(project)
     return maven_deps
 
 def _deps_string(bazel_deps):
@@ -152,7 +144,8 @@ def _generate_maven_repository_impl(ctx):
             normalized_deps = [_normalize_target(x, group_path, package_target_substitutes) for x in bazel_deps]
             unregistered = sets.difference(processed_artifacts, sets.add_all(sets.new(), found_artifacts))
             if bool(unregistered) and not bool(build_substitutes.get(coordinates)):
-                unregistered_deps = [poms.format(x) for x in maven_deps if sets.contains(unregistered, x.coordinate)]
+                unregistered_deps = [
+                    poms.format_dependency(x) for x in maven_deps if sets.contains(unregistered, x.coordinate)]
                 fail("Some dependencies of %s were not pinned in the artifacts list:\n%s" % (
                     spec,
                     list(unregistered_deps),
