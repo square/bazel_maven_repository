@@ -20,9 +20,18 @@ load(":artifacts.bzl", "artifacts")
 load(":poms.bzl", "poms")
 
 _DOWNLOAD_PREFIX = "maven"
-_RUNTIME_DEPENDENCY_SCOPES = sets.add_all(sets.new(), ["compile", "runtime"])
+_RUNTIME_DEPENDENCY_SCOPES = sets.new("compile", "runtime")
 _POM_XPATH_DEPENDENCIES_QUERY = """/project/dependencies/dependency[not(scope) or scope/text()="compile"]"""
-
+_INSECURE_DEPRECATION_WARNING = """WARNING: Using "insecure_artifacts" is deprecated.
+Please use the regular artifacts and set insecure to true. e.g.:
+artifacts = {
+    "%s": { "insecure" : True }
+}"""
+_STRING_SHA_VALUE_DEPRECATION_WARNING = """WARNING: Passing the sha256 as the dictionary value for an artifact is deprecated.
+Please pass in a dictionary for the artifact like this:
+artifacts = {
+    "%s": { "sha256" : "%s" }
+}"""
 _ARTIFACT_DOWNLOAD_BUILD_FILE_TEMPLATE = """
 package(default_visibility = ["//visibility:public"])
 filegroup(
@@ -122,10 +131,10 @@ def _generate_maven_repository_impl(ctx):
         artifact_structs = [artifacts.parse_spec(s) for s in specs]
         sets.add_all(processed_artifacts, ["%s:%s" % (a.group_id, a.artifact_id) for a in artifact_structs])
     build_files = {}
-    for group_id, specs in ctx.attr.grouped_artifacts.items():
+    for group_id, specs_list in ctx.attr.grouped_artifacts.items():
         package_target_substitutes = target_substitutes.get(group_id, {})
         ctx.report_progress("Generating build details for artifacts in %s" % group_id)
-        specs = sets.add_all(sets.new(), specs)
+        specs = sets.copy_of(specs_list)
         prefix = _MAVEN_REPO_BUILD_PREFIX.format(
             group_id = group_id, maven_rules_repository = ctx.attr.maven_rules_repository)
         target_definitions = []
@@ -142,7 +151,7 @@ def _generate_maven_repository_impl(ctx):
                 found_artifacts[dep.coordinate] = dep
                 bazel_deps += [_convert_maven_dep(ctx.attr.name, dep)]
             normalized_deps = [_normalize_target(x, group_path, package_target_substitutes) for x in bazel_deps]
-            unregistered = sets.difference(processed_artifacts, sets.add_all(sets.new(), found_artifacts))
+            unregistered = sets.difference(processed_artifacts, sets.copy_of(found_artifacts))
             if bool(unregistered) and not bool(build_substitutes.get(coordinates)):
                 unregistered_deps = [
                     poms.format_dependency(x) for x in maven_deps if sets.contains(unregistered, x.coordinate)]
@@ -207,18 +216,51 @@ def _check_for_duplicates(artifact_specs):
         elif sets.pop(versions).endswith("-SNAPSHOT"):
             fail("Snapshot versions are not supported in maven_artifacts.bzl.  Please fix %s to a pinned version." % artifact);
 
+_valid_artifact_spec_properties = sets.new("sha256", "insecure")
+def _unsupported_keys(keys_list):
+    return sets.difference(_valid_artifact_spec_properties, sets.copy_of(keys_list))
+
+def _fix_string_booleans(value):
+    if type(value) == type(""):
+        if value != "True" or value != "true":
+            return False
+    return bool(value)
+
 # If artifact/sha pair has missing sha hashes, reject it.
-def _validate_no_insecure_artifacts(artifact_specs = {}):
-    insecure_artifacts = {}
-    for spec, sha in artifact_specs.items():
-        if not bool(sha):
-            insecure_artifacts += { spec : sha }
-    if bool(insecure_artifacts):
-        fail("\n%s %s [\n%s]" % (
-             "These artifacts were specified without sha256 hashes.",
-             "Either add hashes or move to insecure_artifacts:",
-             "".join(sorted(["    \"%s\",\n" % x for x in insecure_artifacts.keys()]))
-        ))
+def _validate_artifacts(artifact_definitions = {}):
+    errors = []
+    if not bool(artifacts):
+        errors += ["At least one artifact must be specified."]
+    for spec, properties in artifact_definitions.items():
+        if type(properties) != type({}):
+            errors += ["""Artifact %s has an invalid property dictionary. Should not be a %s""", (spec, type(properties))]
+        unsupported_keys = _unsupported_keys(properties.keys())
+        if bool(unsupported_keys):
+            errors += ["""Artifact %s has unsupported property keys: %s. Only %s are supported""" % (
+                spec, list(unsupported_keys), list(_valid_artifact_spec_properties)
+            )]
+        artifact = artifacts.parse_spec(spec) # Basic sanity check.
+        if not bool(artifact.version):
+            errors += ["""Artifact "%s" missing version""" % spec]
+        if not properties.get("sha256", None) and not _fix_string_booleans(properties.get("insecure", False)):
+            errors += ["""Artifact "%s" is mising a sha256. Either supply it or mark it "insecure".""" % spec]
+    if bool(errors):
+        fail("Errors found:\n    %s" % "\n    ".join(errors))
+
+# Pre-process the artifact_declarations dictionary and handle older APIs that are now deprecated, until we
+# delete them.
+def _handle_legacy_specifications(artifact_declarations, insecure_artifacts):
+    # Legacy deprecated feature backwards compatibility
+    for spec in insecure_artifacts:
+        print(_INSECURE_DEPRECATION_WARNING % spec)
+        artifact_declarations += { spec : { "insecure": "true" } }
+    for key in artifact_declarations.keys():
+        value = artifact_declarations[key]
+        if type(value) == type(""):
+            print(_STRING_SHA_VALUE_DEPRECATION_WARNING % (key, value))
+            artifact_declarations[key] = { "sha256": value }
+    return artifact_declarations
+
 
 # The implementation of maven_repository_specification.
 #
@@ -228,31 +270,30 @@ def _validate_no_insecure_artifacts(artifact_specs = {}):
 #
 def _maven_repository_specification(
         name,
-        artifact_specs = {},
+        artifact_declarations = {},
         insecure_artifacts = [],
         build_substitutes = {},
         dependency_target_substitutes = {},
         repository_urls = ["https://repo1.maven.org/maven2"]):
 
-    _validate_no_insecure_artifacts(artifact_specs)
+    _handle_legacy_specifications(artifact_declarations, insecure_artifacts)
 
-    for spec in insecure_artifacts:
-        artifact_specs += { spec : "" }
     if len(repository_urls) == 0:
         fail("You must specify at least one repository root url.")
-    if len(artifact_specs) == 0:
+    if len(artifact_declarations) == 0:
         fail("You must register at least one artifact.")
-    _check_for_duplicates(artifact_specs)
+
+    _validate_artifacts(artifact_declarations)
+
+    _check_for_duplicates(artifact_declarations)
     grouped_artifacts = {}
-    for artifact_spec, sha256 in artifact_specs.items():
+    for artifact_spec, properties in artifact_declarations.items():
         artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
 
         # Track group_ids in order to build per-group BUILD files.
         grouped_artifacts[artifact.group_id] = (
             grouped_artifacts.get(artifact.group_id, default = []) + [artifact.original_spec])
-
-        if not bool(sha256):
-            sha256 = None # tidy empty strings - invalid shas will be rejected by the repository_ctx.download function.
+        sha256 = properties.get("sha256", None)
         urls = ["%s/%s" % (repo, artifact.path) for repo in repository_urls]
         _fetch_artifact(
             name = artifact.maven_target_name,
@@ -272,6 +313,11 @@ def _maven_repository_specification(
         dependency_target_substitutes = dependency_target_substitutes_rewritten,
         build_substitutes = build_substitutes,
     )
+
+for_testing = struct(
+    unsupported_keys = _unsupported_keys,
+    handle_legacy_specifications = _handle_legacy_specifications
+)
 
 
 ####################
@@ -297,10 +343,17 @@ def maven_repository_specification(
         # The name of the repository
         name,
 
-        # The dictionary of artifact:sha256 entries used to populate this repository
+        # The dictionary of artifact -> properties which allows us to specify artifacts with more details.  These
+        # properties don't include the group, artifact name, version, classifier, or type, which are all specified
+        # by the artifact key itself.
+        #
+        # The currently supported properties are:
+        #    sha256 -> the hash of the artifact file to be downloaded.
+        #    insecure -> if true, don't fail on a missing sha256 hash.
         artifacts = {},
 
         # The list of artifacts (without sha256 hashes) that will be used without file hash checking.
+        # DEPRECATED: Please use artifacts with an "insecure = true" property.
         insecure_artifacts = [],
 
         # The dictionary of build-file substitutions (per-target) which will replace the auto-generated target
@@ -318,7 +371,7 @@ def maven_repository_specification(
     # with the artifact utility struct.
     _maven_repository_specification(
         name = name,
-        artifact_specs = artifacts,
+        artifact_declarations = artifacts,
         insecure_artifacts = insecure_artifacts,
         build_substitutes = build_substitutes,
         dependency_target_substitutes = dependency_target_substitutes,
