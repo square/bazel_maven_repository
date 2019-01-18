@@ -16,4 +16,8 @@ before_install:
   - sudo dpkg -i bazel_0.21.0-linux-x86_64.deb
 
 script:
+  - # Test the maven integration's internal unit tests
   - bazel test //maven/...
+  - # Exercise the sample project.
+  - cd test/test_workspace
+  - bazel test //...
