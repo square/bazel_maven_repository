@@ -1,18 +1,15 @@
+load(
+    ":poms_for_testing.bzl",
+    "COMPLEX_POM",
+    "PARENT_POM",
+    "GRANDPARENT_POM",
+    "SIMPLE_DEP_POM",
+    "SCOPED_DEP_POM",
+    "SYSTEM_PATH_POM",
+    "SIMPLE_PROPERTIES_POM"
+)
 load(":testing.bzl", "asserts", "test_suite")
 load("//maven:poms.bzl", "poms")
-load("//maven:utils.bzl", "strings")
-
-SIMPLE_DEP_POM = """
-<project>
-  <dependencies>
-    <dependency>
-      <groupId>foo</groupId>
-      <artifactId>bar</artifactId>
-      <version>1.0</version>
-    </dependency>
-  </dependencies>
-</project>
-"""
 
 def simple_pom_fragment_process(env):
     deps = poms.extract_dependencies(poms.parse(SIMPLE_DEP_POM))
@@ -27,117 +24,25 @@ def simple_pom_fragment_process(env):
     asserts.equals(env, "compile", dep.scope)
     asserts.false(env, dep.optional)
 
-
-SCOPED_DEP_POM = """
-<project>
-  <dependencies>
-    <dependency>
-      <groupId>foo</groupId>
-      <artifactId>bar</artifactId>
-      <version>1.0</version>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
-</project>
-"""
-
 def simple_pom_fragment_process_scope(env):
     dep = poms.extract_dependencies(poms.parse(SCOPED_DEP_POM))[0]
     asserts.equals(env, "test", dep.scope)
 
-SYSTEM_PATH_POM = """
-<project>
-  <dependencies>
-    <dependency>
-      <groupId>foo</groupId>
-      <artifactId>bar</artifactId>
-      <version>1.0</version>
-      <systemPath>/blah/foo</systemPath>
-    </dependency>
-  </dependencies>
-</project>
-"""
-
 def simple_pom_fragment_process_system_path(env):
     dep = poms.extract_dependencies(poms.parse(SYSTEM_PATH_POM))[0]
     asserts.equals(env, "/blah/foo", dep.system_path)
-
-
-
-COMPLEX_POM = """
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
-  <modelVersion>4.0.0</modelVersion>
-  <parent>
-    <groupId>com.google.guava</groupId>
-    <artifactId>guava-parent</artifactId>
-    <version>25.0-jre</version>
-  </parent>
-  <artifactId>guava</artifactId>
-  <packaging>bundle</packaging>
-  <properties>
-    <!-- Properties for versions. -->
-    <animal.sniffer.version>5.0</animal.sniffer.version>
-  </properties>
-  <dependencies>
-    <!-- dependency>
-      <groupId>com.google.guava</groupId>
-      <artifactId>guava</artifactId>
-    </dependency-->
-    <dependency>
-      <groupId>com.google.code.findbugs</groupId>
-      <artifactId>jsr305</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.checkerframework</groupId>
-      <artifactId>checker-compat-qual</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.google.errorprone</groupId>
-      <artifactId>error_prone_annotations</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.google.j2objc</groupId>
-      <artifactId>j2objc-annotations</artifactId>
-      <optional>true</optional>
-    </dependency>
-    <!-- Some random comment -->
-    <dependency>
-      <groupId>org.codehaus.mojo</groupId>
-      <artifactId>animal-sniffer-annotations</artifactId>
-      <version>${animal.sniffer.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-    </dependency>
-  </dependencies>
-  <foo />
-  <dependencyManagement>
-    <dependencies>
-      <dependency>
-        <groupId>org.checkerframework</groupId>
-        <artifactId>checker-compat-qual</artifactId>
-      </dependency>
-      <dependency>
-        <groupId>junit</groupId>
-        <artifactId>junit</artifactId>
-        <version>4.12</version>
-        <scope>test</scope>
-      </dependency>
-    </dependencies>
-  </dependencyManagement>
-</project>
-"""
-
 
 def complex_pom_test(env):
     project = poms.parse(COMPLEX_POM)
     dependencies = None
     managed_dependencies = None
     properties = None
+
+    asserts.equals(env, 7, len(project.children), "child nodes of parent")
+    asserts.equals(env,
+        expected = ["modelVersion", "parent", "artifactId", "properties", "dependencies", "foo", "dependencyManagement"],
+        actual = [x.label for x in project.children])
+
     for node in project.children:
         if node.label == "properties":
             properties = node.children
@@ -147,13 +52,36 @@ def complex_pom_test(env):
             dependencies = node.children
 
     asserts.true(env, dependencies)
-    asserts.equals(env, 6, len(dependencies))
+    asserts.equals(env, 4, len(dependencies), "dependencies") # Superficial dependencies, not fully accounted-for.
 
     asserts.true(env, properties)
-    asserts.equals(env, 1, len(properties))
+    asserts.equals(env, 1, len(properties), "properties")
 
     asserts.true(env, managed_dependencies)
-    asserts.equals(env, 2, len(managed_dependencies))
+    asserts.equals(env, 1, len(managed_dependencies), "managed_dependencies")
+
+
+def extract_parent_test(env):
+    pom = poms.parse(COMPLEX_POM)
+    parent_artifact = poms.extract_parent(pom)
+    asserts.equals(env, "parent", parent_artifact.artifact_id)
+    pom = poms.parse(PARENT_POM)
+    parent_artifact = poms.extract_parent(pom)
+    asserts.equals(env, "grandparent", parent_artifact.artifact_id)
+    pom = poms.parse(GRANDPARENT_POM)
+    parent_artifact = poms.extract_parent(pom)
+    asserts.false(env, parent_artifact)
+
+def extract_properties_simple_test(env):
+    properties = poms.extract_properties(poms.parse(SIMPLE_PROPERTIES_POM))
+    asserts.equals(env, 2, len(properties), "length of properties dictionary")
+    asserts.equals(env, "foo", properties["foo"], "property 'foo'")
+    asserts.equals(env, "bar", properties["foo.bar"], "property 'foo.bar'")
+
+def extract_properties_complex_pom_test(env):
+    properties = poms.extract_properties(poms.parse(COMPLEX_POM))
+    asserts.equals(env, 1, len(properties), "length of properties dictionary")
+    asserts.equals(env, "5.0", properties["animal.sniffer.version"], "property 'animal.sniffer.version'")
 
 
 TESTS = [
@@ -161,6 +89,9 @@ TESTS = [
     simple_pom_fragment_process_scope,
     simple_pom_fragment_process_system_path,
     complex_pom_test,
+    extract_parent_test,
+    extract_properties_simple_test,
+    extract_properties_complex_pom_test,
 ]
 
 # Roll-up function.

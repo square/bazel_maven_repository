@@ -26,6 +26,13 @@ paths = struct(
     filename = _filename
 )
 
+def _max_int(a, b):
+    return a if a > b else b
+
+ints = struct(
+    max = _max_int
+)
+
 # Encodes a dict(string->dict(string->string)) into a dict(string->list(string)) with the string encoded so it can
 # be split and restored in decode_nested.  Skylark rules can't take in arbitrarily deep dict nesting.
 #
