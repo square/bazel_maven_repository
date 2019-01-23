@@ -1,7 +1,7 @@
 load(":all_tests.bzl", "all_tests")
 
 # Separated into another package to avoid dragging the test code into the analysis phase via //maven:BUILD
-all_tests(name = "all_tests")
+all_tests(name = "all_tests", srcs = glob(["*_test.bzl"]))
 
 # A test to make sure that there is _some_ formal test rule, since all_tests is technically not a build rule (to
 # avoid complexities in the test writing)

@@ -9,5 +9,5 @@ def filename_test(env):
     asserts.equals(env, "blah", paths.filename("@maven//bar/blah"))
 
 # Roll-up function.
-def paths_test_suite():
-    test_suite("paths", tests = [filename_test])
+def suite():
+    return test_suite("paths", tests = [filename_test])

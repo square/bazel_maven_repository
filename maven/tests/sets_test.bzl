@@ -89,5 +89,5 @@ TESTS = [
 ]
 
 # Roll-up function.
-def sets_test_suite():
-    test_suite("sets", tests = TESTS)
+def suite():
+    return test_suite("sets", tests = TESTS)

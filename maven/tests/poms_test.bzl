@@ -164,5 +164,5 @@ TESTS = [
 ]
 
 # Roll-up function.
-def poms_test_suite():
-    test_suite("pom processing", tests = TESTS)
+def suite():
+    return test_suite("pom processing", tests = TESTS)

@@ -12,5 +12,5 @@ def contains_test(env):
     asserts.false(env, strings.contains("foobarbash", "Bar"))
 
 # Roll-up function.
-def strings_test_suite():
-    test_suite("strings", tests = [trim_test_custom, trim_test_default, contains_test])
+def suite():
+    return test_suite("strings", tests = [trim_test_custom, trim_test_default, contains_test])

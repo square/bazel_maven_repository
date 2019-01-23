@@ -17,5 +17,5 @@ def encode_test(env):
     asserts.equals(env, expected, dicts.encode_nested(nested))
 
 # Roll-up function.
-def dicts_test_suite():
-    test_suite("dicts", tests = [encode_test])
+def suite():
+    return test_suite("dicts", tests = [encode_test])

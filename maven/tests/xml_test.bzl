@@ -146,4 +146,4 @@ TESTS = [
 
 # Roll-up function.
 def suite():
-    test_suite("xml utilities", tests = TESTS)
+    return test_suite("xml utilities", tests = TESTS)

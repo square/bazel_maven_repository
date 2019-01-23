@@ -45,12 +45,16 @@ def _pop(set):
     return item
 
 def _new(*items):
-    """Creates a new set. """
+    """Creates a new set, from a variable array of parameters. """
+    return {} if not bool(items) else sets.add_all({}, list(items))
+
+def _copy_of(items):
+    """Creates a new set from a given list. """
     return {} if not bool(items) else sets.add_all({}, list(items))
 
 def _difference(a, b):
     """Returns the elements that reflect the set difference (items in b that are not in a)"""
-    return sets.add_all(sets.new(), [x for x in list(b) if not sets.contains(a, x)])
+    return sets.copy_of([x for x in list(b) if not sets.contains(a, x)])
 
 def _disjoint(a, b):
     """Returns the elements each of a or b, but which are not in both sets."""
@@ -68,4 +72,5 @@ sets = struct(
     add_each = _add_each,
     pop = _pop,
     new = _new,
+    copy_of = _copy_of,
 )
