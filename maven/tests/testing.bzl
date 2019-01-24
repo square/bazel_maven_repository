@@ -31,8 +31,7 @@ def _fail(env, failure_message):
     error = "Assertion failure in test %s: %s" % (env.current[0].name, failure_message)
     if not env.fail_at_end:
         fail(error)
-    env.current[0].passed.pop()
-    env.failures.append(error)
+    env.current[0].failures.append(error)
 
 # Holds the assertion functions.
 asserts = struct(
@@ -48,14 +47,17 @@ def test_suite(name, tests = [], fail_at_end = True):
     print("TEST: ===============================================")
     print("TEST: Executing test suite: %s\n\n" % name)
     env = struct(name = name, failures = [], current = [], fail_at_end = fail_at_end)
-    failure_count = 0
+    failing_test_cases = 0
     for test in tests:
-        env.current.append(struct(name = str(test), passed = [True]))
+        env.current.append(struct(name = str(test), failures = []))
         test(env)
         result = env.current.pop()
-        if not bool(result.passed):
-            failure_count += 1
-        print("TEST: %s ..... %s" % (str(test), "PASSED" if bool(result.passed) else "FAILED"))
+        if bool(result.failures):
+            failing_test_cases += 1
+            for failure in result.failures:
+                env.failures.append(failure)
+        print("TEST: %s ..... %s" % (
+            str(test), "FAILED on %s assertions" % len(result.failures) if bool(result.failures) else "PASSED"))
     print("TEST: -----------------------------------------------")
-    print("TEST: %s tests executed, %s tests failed.\n\n"% (len(tests), failure_count))
+    print("TEST: %s tests executed, %s test cases failed.\n\n"% (len(tests), failing_test_cases, ))
     return env.failures
