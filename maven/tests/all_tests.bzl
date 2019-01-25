@@ -1,14 +1,37 @@
-load(":dicts_test.bzl", dicts = "dicts_test_suite")
-load(":paths_test.bzl", paths = "paths_test_suite")
-load(":poms_test.bzl", poms = "poms_test_suite")
-load(":sets_test.bzl", sets = "sets_test_suite")
-load(":strings_test.bzl", strings = "strings_test_suite")
+load(":dicts_test.bzl", dicts = "suite")
+load(":paths_test.bzl", paths = "suite")
+load(":poms_test.bzl", poms = "suite")
+load(":sets_test.bzl", set_tests = "suite")
+load(":strings_test.bzl", strings = "suite")
 load(":xml_test.bzl", xml = "suite")
 
-def _all_tests_rule_impl(ignore):
-    for suite in [dicts, paths, poms, sets, strings, xml]:
-        suite()
+load("//maven:sets.bzl", "sets")
+
+
+SUITES = [dicts, paths, poms, set_tests, strings, xml]
+
+def _validate(ctx, suites):
+    # Function objects don't have good properties, so we hack it from the string representation.
+    suite_targets = [str(suite)[1:-1].split(" ")[3] for suite in SUITES]
+    suite_names = [target.replace("//", "").replace(":", "/") for target in suite_targets]
+    unreferenced = sets.difference(sets.copy_of(suite_names), sets.copy_of([x.path for x in ctx.files.srcs]))
+    if bool(unreferenced):
+        fail("Some globbed tests were not referenced in all_tests.bzl's SUITES: %s" % list(unreferenced))
+
+def _all_tests_rule_impl(ctx):
+    _validate(ctx, SUITES)
+    failures = []
+    for suite in SUITES:
+        suite_failures = suite()
+        for failure in suite_failures:
+            failures.append(failure)
+    if bool(failures):
+        fail("Test Failures:\n%s" % "\n".join(failures))
+    return [DefaultInfo()]
 
 all_tests = rule(
     implementation = _all_tests_rule_impl,
+    attrs = {
+        "srcs": attr.label_list(allow_files = True),
+    }
 )

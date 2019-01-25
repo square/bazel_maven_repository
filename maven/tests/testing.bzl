@@ -28,7 +28,10 @@ def _assert_equals(env, expected, actual, message = None):
         asserts.fail(env, full_message)
 
 def _fail(env, failure_message):
-    fail("Assertion failure in test %s: %s" % (env.name, failure_message))
+    error = "Assertion failure in test %s: %s" % (env.current[0].name, failure_message)
+    if not env.fail_at_end:
+        fail(error)
+    env.current[0].failures.append(error)
 
 # Holds the assertion functions.
 asserts = struct(
@@ -40,10 +43,21 @@ asserts = struct(
 
 
 # Runs all the tests in a given suite.
-def test_suite(name, tests = []):
+def test_suite(name, tests = [], fail_at_end = True):
     print("TEST: ===============================================")
     print("TEST: Executing test suite: %s\n\n" % name)
+    env = struct(name = name, failures = [], current = [], fail_at_end = fail_at_end)
+    failing_test_cases = 0
     for test in tests:
-        env = struct(name = str(test))
+        env.current.append(struct(name = str(test), failures = []))
         test(env)
-        print("TEST: %s ..... PASSED" % str(test))
+        result = env.current.pop()
+        if bool(result.failures):
+            failing_test_cases += 1
+            for failure in result.failures:
+                env.failures.append(failure)
+        print("TEST: %s ..... %s" % (
+            str(test), "FAILED on %s assertions" % len(result.failures) if bool(result.failures) else "PASSED"))
+    print("TEST: -----------------------------------------------")
+    print("TEST: %s tests executed, %s test cases failed.\n\n"% (len(tests), failing_test_cases, ))
+    return env.failures
