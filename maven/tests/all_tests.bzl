@@ -1,5 +1,6 @@
 load(":dicts_test.bzl", dicts = "suite")
 load(":paths_test.bzl", paths = "suite")
+load(":maven_test.bzl", maven = "suite")
 load(":poms_test.bzl", poms = "suite")
 load(":sets_test.bzl", set_tests = "suite")
 load(":strings_test.bzl", strings = "suite")
@@ -8,7 +9,7 @@ load(":xml_test.bzl", xml = "suite")
 load("//maven:sets.bzl", "sets")
 
 
-SUITES = [dicts, paths, poms, set_tests, strings, xml]
+SUITES = [dicts, paths, maven, poms, set_tests, strings, xml]
 
 def _validate(ctx, suites):
     # Function objects don't have good properties, so we hack it from the string representation.
