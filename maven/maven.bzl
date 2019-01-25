@@ -227,7 +227,7 @@ def _fix_string_booleans(value):
     return bool(value)
 
 # If artifact/sha pair has missing sha hashes, reject it.
-def _validate_artifacts(artifact_definitions = {}):
+def _validate_artifacts(artifact_definitions):
     errors = []
     if not bool(artifacts):
         errors += ["At least one artifact must be specified."]
