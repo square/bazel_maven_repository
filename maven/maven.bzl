@@ -244,6 +244,8 @@ def _validate_artifacts(artifact_definitions = {}):
             errors += ["""Artifact "%s" missing version""" % spec]
         if not properties.get("sha256", None) and not _fix_string_booleans(properties.get("insecure", False)):
             errors += ["""Artifact "%s" is mising a sha256. Either supply it or mark it "insecure".""" % spec]
+        if properties.get("sha256", None) and _fix_string_booleans(properties.get("insecure", False)):
+            errors += ["""Artifact "%s" cannot be both insecure and have a sha256.  Specify one or the other.""" % spec]
     if bool(errors):
         fail("Errors found:\n    %s" % "\n    ".join(errors))
 
@@ -348,8 +350,8 @@ def maven_repository_specification(
         # by the artifact key itself.
         #
         # The currently supported properties are:
-        #    sha256 -> the hash of the artifact file to be downloaded.
-        #    insecure -> if true, don't fail on a missing sha256 hash.
+        #    sha256 -> the hash of the artifact file to be downloaded. (Incompatible with "insecure")
+        #    insecure -> if true, don't fail on a missing sha256 hash. (Incompatible with "sha256")
         artifacts = {},
 
         # The list of artifacts (without sha256 hashes) that will be used without file hash checking.
