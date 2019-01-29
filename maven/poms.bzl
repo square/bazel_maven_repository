@@ -138,15 +138,14 @@ def _parse(xml_text):
 def _merge_content_last_wins(a, b):
     if not bool(a):
         return b
-    elif not bool(b):
+    if not bool(b):
         return a
-    else:
-        if a.label != b.label:
-            fail("Attempt to merge to different pom elements: %s, %s", (a, b))
-        return xml.new_node(
-            label = a.label,
-            content = b.content if bool(b.content) else a.content,
-        )
+    if a.label != b.label:
+        fail("Attempt to merge to different pom elements: %s, %s", (a, b))
+    return xml.new_node(
+        label = a.label,
+        content = b.content if bool(b.content) else a.content,
+    )
 
 # This could be 100% reusable, except for the limit on recursion.  The strategy can't loop back and call this. :/
 def _merge_leaf_elements(parent_list, child_list):
@@ -170,7 +169,7 @@ def _children_if_exists(node):
 def _merge_properties_section(parent_node, child_node):
     if not bool(parent_node):
         return child_node
-    elif not bool(child_node):
+    if not bool(child_node):
         return parent_node
     children = _merge_leaf_elements(
         _children_if_exists(xml.find_first(parent_node, labels.PROPERTIES)),
@@ -185,11 +184,11 @@ def _merge_properties_section(parent_node, child_node):
 def _merge_dependency_section(parent, child):
     if not bool(parent):
         return child if bool(child) else xml.new_node(label = labels.DEPENDENCIES)
-    elif not bool(child):
+    if not bool(child):
         return parent if bool(parent) else xml.new_node(label = labels.DEPENDENCIES)
     if parent.label != labels.DEPENDENCIES:
         fail("Parent node in merged dependency operation not a <dependencies> node: %s" % parent)
-    elif child.label != labels.DEPENDENCIES:
+    if child.label != labels.DEPENDENCIES:
         fail("Child node in merged dependency operation not a <dependencies> node: %s" % child)
 
     # index the <dependency> nodes by groupId:artifactId
