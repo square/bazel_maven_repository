@@ -122,8 +122,6 @@ def _get_inheritance_chain(ctx, xml_text):
 
 # Take an inheritance chain of xml trees (Fetched by _get_inheritance_chain) and merge them from the top (the end of
 # the list) to the bottom (the beginning of the list)
-load(":xml.bzl", "xml")  # for debug code. TODO: remove this.
-
 def _get_effective_pom(inheritance_chain):
     merged = inheritance_chain.pop()
     for next in reversed(inheritance_chain):
