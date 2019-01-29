@@ -207,6 +207,8 @@ def _extract_properties(project):
     properties = {}
     for node in properties_nodes:
         properties[node.label] = node.content
+
+    # Generate maven's implicit properties from the project itself.
     for label in [labels.GROUP_ID, labels.ARTIFACT_ID, labels.VERSION]:
         node = xml.find_first(project, label)
         if bool(node):
