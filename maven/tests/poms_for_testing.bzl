@@ -43,6 +43,7 @@ SYSTEM_PATH_POM = POM_PREFIX + """
 """ + POM_SUFFIX
 
 SIMPLE_PROPERTIES_POM = POM_PREFIX + """
+  <version>2.0</version>
   <properties>
     <foo>foo</foo>
     <foo.bar>bar</foo.bar>

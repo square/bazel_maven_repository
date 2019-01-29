@@ -8,7 +8,6 @@
 #   needs curation.  Indeed, it mostly only has variable substitution because the unversioned coordinates don't change
 #   so frequently.
 
-
 # Description:
 #   Substitutes the naive maven_jvm_artifact for com.google.dagger:dagger with a flagor that exports the compiler
 #   plugin.  Contains the `dagger_version` substitution variable.
@@ -43,21 +42,5 @@ java_plugin(
    processor_class = "dagger.internal.codegen.ComponentProcessor",
    generates_api = True,
    deps = [":dagger_compiler"],
-)
-"""
-
-# Description:
-#   Substitute this since the naive reading of the .pom doesn't properly list some dependencies as test-only.
-#   This shouldn't be necessary once property-substitution and parent-pom integration are supported.
-GOOGLE_JAVA_FORMAT_BUILD_SUBSTITUTE = """
-maven_jvm_artifact(
-    name = "google_java_format",
-    artifact = "com.google.googlejavaformat:google-java-format:1.6",
-    deps = [
-        "@maven//com/google/guava",
-        "@maven//com/google/errorprone:javac_shaded",
-        "@maven//com/google/code/findbugs:jsr305",
-        "@maven//com/google/errorprone:error_prone_annotations",
-    ],
 )
 """
