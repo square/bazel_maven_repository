@@ -15,7 +15,7 @@
 #   A repository rule intended to be used in populating @maven_repository.
 #
 load(":sets.bzl", "sets")
-load(":utils.bzl", "strings", "paths", "dicts")
+load(":utils.bzl", "dicts", "paths", "strings")
 load(":artifacts.bzl", "artifacts")
 load(":poms.bzl", "poms")
 
@@ -58,7 +58,7 @@ def _fetch_artifact_impl(ctx):
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
     ctx.file(
         "%s/BUILD" % _DOWNLOAD_PREFIX,
-        _ARTIFACT_DOWNLOAD_BUILD_FILE_TEMPLATE.format(prefix = _DOWNLOAD_PREFIX, path = ctx.attr.local_path)
+        _ARTIFACT_DOWNLOAD_BUILD_FILE_TEMPLATE.format(prefix = _DOWNLOAD_PREFIX, path = ctx.attr.local_path),
     )
 
 _fetch_artifact = repository_rule(
@@ -89,20 +89,48 @@ def _convert_maven_dep(repo_name, artifact):
 def _normalize_target(full_target_spec, current_package, target_substitutions):
     full_target_spec = target_substitutions.get(full_target_spec, full_target_spec)
     full_package, target = full_target_spec.split(":")
-    local_package = full_package.split("//")[1] # @maven//blah/foo -> blah/foo
+    local_package = full_package.split("//")[1]  # @maven//blah/foo -> blah/foo
     if local_package == current_package:
-        return ":%s" % target # Trim to a local reference.
+        return ":%s" % target  # Trim to a local reference.
     return full_package if paths.filename(full_package) == target else full_target_spec
 
-def _get_dependencies_from_pom_files(ctx, artifact, group_path):
+# This should be in poms, but we want to keep ctx/network/file operations separate, and Starlark is constrained
+# enough that creating a "downloader" struct is more trouble than it's worth.
+def _fetch_pom(ctx, artifact):
     pom_urls = ["%s/%s" % (repo, artifact.pom) for repo in ctx.attr.repository_urls]
-    pom_file = "%s/%s-%s.pom" % (group_path, artifact.artifact_id, artifact.version)
+    pom_file = "%s/%s-%s.pom" % (artifact.group_path, artifact.artifact_id, artifact.version)
     ctx.download(url = pom_urls, output = pom_file)
-    result = ctx.execute(["cat" , pom_file])
+    result = ctx.execute(["cat", pom_file])
     if result.return_code:
-        fail("Error reading pom file %s (return code %s)", (pom_file, result.return_code))
+        fail("Error reading pom file %s (return code %s)" % (pom_file, result.return_code))
+    return result.stdout
 
-    project = poms.parse(result.stdout)
+# In theory, this logic should live in poms.bzl, but bazel makes it harder to use the strategy pattern (to pass in a
+# downloader) and we want to keep file and network code out of the poms processing code.
+def _get_inheritance_chain(ctx, xml_text):
+    inheritance_chain = [poms.parse(xml_text)]
+    current = inheritance_chain[0]
+    for _ in range(100):  # Can't use recursion, so just iterate
+        raw_parent_artifact = poms.extract_parent(current)
+        if not bool(raw_parent_artifact):
+            break
+        parent_artifact = artifacts.annotate(raw_parent_artifact)
+        parent_node = poms.parse(_fetch_pom(ctx, parent_artifact))
+        inheritance_chain += [parent_node]
+        current = parent_node
+    return inheritance_chain
+
+# Take an inheritance chain of xml trees (Fetched by _get_inheritance_chain) and merge them from the top (the end of
+# the list) to the bottom (the beginning of the list)
+def _get_effective_pom(inheritance_chain):
+    merged = inheritance_chain.pop()
+    for next in reversed(inheritance_chain):
+        merged = poms.merge_parent(parent = merged, child = next)
+    return merged
+
+def _get_dependencies_from_pom_files(ctx, artifact, group_path):
+    inheritance_chain = _get_inheritance_chain(ctx, _fetch_pom(ctx, artifact))
+    project = _get_effective_pom(inheritance_chain)
     maven_deps = poms.extract_dependencies(project)
     return maven_deps
 
@@ -113,9 +141,10 @@ def _deps_string(bazel_deps):
     return "    deps = [\n%s\n    ]\n" % "\n".join(bazel_deps) if bool(bazel_deps) else ""
 
 def _should_include_dependency(dep):
-    return (sets.contains(_RUNTIME_DEPENDENCY_SCOPES, dep.scope)
-        and not bool(dep.system_path)
-        and not dep.optional
+    return (
+        sets.contains(_RUNTIME_DEPENDENCY_SCOPES, dep.scope) and
+        not bool(dep.system_path) and
+        not dep.optional
     )
 
 def _generate_maven_repository_impl(ctx):
@@ -136,7 +165,9 @@ def _generate_maven_repository_impl(ctx):
         ctx.report_progress("Generating build details for artifacts in %s" % group_id)
         specs = sets.copy_of(specs_list)
         prefix = _MAVEN_REPO_BUILD_PREFIX.format(
-            group_id = group_id, maven_rules_repository = ctx.attr.maven_rules_repository)
+            group_id = group_id,
+            maven_rules_repository = ctx.attr.maven_rules_repository,
+        )
         target_definitions = []
         group_path = group_id.replace(".", "/")
         for spec in specs:
@@ -154,7 +185,10 @@ def _generate_maven_repository_impl(ctx):
             unregistered = sets.difference(processed_artifacts, sets.copy_of(found_artifacts))
             if bool(unregistered) and not bool(build_substitutes.get(coordinates)):
                 unregistered_deps = [
-                    poms.format_dependency(x) for x in maven_deps if sets.contains(unregistered, x.coordinate)]
+                    poms.format_dependency(x)
+                    for x in maven_deps
+                    if sets.contains(unregistered, x.coordinate)
+                ]
                 fail("Some dependencies of %s were not pinned in the artifacts list:\n%s" % (
                     spec,
                     list(unregistered_deps),
@@ -166,14 +200,14 @@ def _generate_maven_repository_impl(ctx):
                         target = artifact.third_party_target_name,
                         deps = _deps_string(normalized_deps),
                         artifact_coordinates = artifact.original_spec,
-                    )
-                )
+                    ),
+                ),
             ]
         file = "%s/BUILD" % group_path
         content = "\n".join([prefix] + target_definitions)
         ctx.file(file, content)
-        # build_files[build_file] = build_content
 
+# build_files[build_file] = build_content
 
 _generate_maven_repository = repository_rule(
     implementation = _generate_maven_repository_impl,
@@ -187,12 +221,12 @@ _generate_maven_repository = repository_rule(
 )
 
 # Implementation of the maven_jvm_artifact rule.
-def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], exports = [],  **kwargs):
+def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], exports = [], **kwargs):
     artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
     maven_target = "@%s//%s:%s" % (artifact.maven_target_name, _DOWNLOAD_PREFIX, artifact.path)
     import_target = artifact.maven_target_name + "_import"
     target_name = name if name else artifact.third_party_target_name
-    exports = exports + deps # A temporary hack since the existing third_party artifacts use exports instead of deps.
+    exports = exports + deps  # A temporary hack since the existing third_party artifacts use exports instead of deps.
     if artifact.packaging == "jar":
         native.java_import(name = target_name, deps = exports, exports = exports, visibility = visibility, jars = [maven_target], **kwargs)
     elif artifact.packaging == "aar":
@@ -214,9 +248,10 @@ def _check_for_duplicates(artifact_specs):
         if len(versions.keys()) > 1:
             fail("Several versions of %s are specified in maven_artifacts.bzl: %s" % (artifact, versions.keys()))
         elif sets.pop(versions).endswith("-SNAPSHOT"):
-            fail("Snapshot versions are not supported in maven_artifacts.bzl.  Please fix %s to a pinned version." % artifact);
+            fail("Snapshot versions are not supported in maven_artifacts.bzl.  Please fix %s to a pinned version." % artifact)
 
 _valid_artifact_spec_properties = sets.new("sha256", "insecure")
+
 def _unsupported_keys(keys_list):
     return sets.difference(_valid_artifact_spec_properties, sets.copy_of(keys_list))
 
@@ -237,9 +272,11 @@ def _validate_artifacts(artifact_definitions):
         unsupported_keys = _unsupported_keys(properties.keys())
         if bool(unsupported_keys):
             errors += ["""Artifact %s has unsupported property keys: %s. Only %s are supported""" % (
-                spec, list(unsupported_keys), list(_valid_artifact_spec_properties)
+                spec,
+                list(unsupported_keys),
+                list(_valid_artifact_spec_properties),
             )]
-        artifact = artifacts.parse_spec(spec) # Basic sanity check.
+        artifact = artifacts.parse_spec(spec)  # Basic sanity check.
         if not bool(artifact.version):
             errors += ["""Artifact "%s" missing version""" % spec]
         if not properties.get("sha256", None) and not _fix_string_booleans(properties.get("insecure", False)):
@@ -255,14 +292,13 @@ def _handle_legacy_specifications(artifact_declarations, insecure_artifacts):
     # Legacy deprecated feature backwards compatibility
     for spec in insecure_artifacts:
         print(_INSECURE_DEPRECATION_WARNING % spec)
-        artifact_declarations += { spec : { "insecure": "true" } }
+        artifact_declarations += {spec: {"insecure": "true"}}
     for key in artifact_declarations.keys():
         value = artifact_declarations[key]
         if type(value) == type(""):
             print(_STRING_SHA_VALUE_DEPRECATION_WARNING % (key, value))
-            artifact_declarations[key] = { "sha256": value }
+            artifact_declarations[key] = {"sha256": value}
     return artifact_declarations
-
 
 # The implementation of maven_repository_specification.
 #
@@ -277,7 +313,6 @@ def _maven_repository_specification(
         build_substitutes = {},
         dependency_target_substitutes = {},
         repository_urls = ["https://repo1.maven.org/maven2"]):
-
     _handle_legacy_specifications(artifact_declarations, insecure_artifacts)
 
     if len(repository_urls) == 0:
@@ -294,7 +329,8 @@ def _maven_repository_specification(
 
         # Track group_ids in order to build per-group BUILD files.
         grouped_artifacts[artifact.group_id] = (
-            grouped_artifacts.get(artifact.group_id, default = []) + [artifact.original_spec])
+            grouped_artifacts.get(artifact.group_id, default = []) + [artifact.original_spec]
+        )
         sha256 = properties.get("sha256", None)
         urls = ["%s/%s" % (repo, artifact.path) for repo in repository_urls]
         _fetch_artifact(
@@ -318,9 +354,11 @@ def _maven_repository_specification(
 
 for_testing = struct(
     unsupported_keys = _unsupported_keys,
-    handle_legacy_specifications = _handle_legacy_specifications
+    handle_legacy_specifications = _handle_legacy_specifications,
+    fetch_pom = _fetch_pom,
+    get_inheritance_chain = _get_inheritance_chain,
+    get_effective_pom = _get_effective_pom,
 )
-
 
 ####################
 # PUBLIC FUNCTIONS #
@@ -330,7 +368,6 @@ for_testing = struct(
 def maven_jvm_artifact(artifact, name = None, deps = [], exports = [], visibility = ["//visibility:public"], **kwargs):
     # redirect to _maven_jvm_artifact, so we can externally use the name "artifact" but internally use artifact_spec
     _maven_jvm_artifact(artifact_spec = artifact, name = name, deps = deps, exports = exports, visibility = visibility, **kwargs)
-
 
 # Description:
 #   Generates the bazel repo and download logic for each artifact (and repository URL prefixes) in the WORKSPACE
@@ -368,7 +405,6 @@ def maven_repository_specification(
 
         # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
         repository_urls = ["https://repo1.maven.org/maven2"]):
-
     # Redirected to _maven_repository_specification to allow the public parameter "artifacts" without conflicting
     # with the artifact utility struct.
     _maven_repository_specification(

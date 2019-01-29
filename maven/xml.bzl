@@ -184,6 +184,24 @@ def _element_token_array(xml):
     return tokens
 
 # Description:
+#   Creates a new xml node struct used in the tree.
+def _new_node(label, content = None, children = []):
+    return struct(label = label, content = content, children = children)
+
+# Description:
+#   Returns the first node with the given label, if it's present in the children of the given node.
+def _find_first(node, *labels):
+    stack = []
+    current = node
+    for label in list(labels):
+        for child in current.children:
+            if child.label == label:
+                stack.append(child.label)
+                current = child
+                break
+    return current if list(labels) == stack else None
+
+# Description:
 #   A simplified maven XML parser, which ignores namespaces, mostly ignores (but preserves the text of) xml attributes.
 #
 #   This parser is limited, in that it:
@@ -206,48 +224,34 @@ def _element_token_array(xml):
 #
 # Returns:
 #   An element tree with an xml_node structure defined above.
-def _parse(xml):
+def _parse(xml_text):
     path = [] # The current node in the tree, (e.g. ["project", "dependencies", "dependency[0]"]
-    tokens = elements.token_array(xml)
-    root = struct(label = None, content = None, children = [])
+    tokens = elements.token_array(xml_text)
+    root = xml.new_node(label = None, content = None, children = [])
     path += [root]
     prev = None
     for i in range(0, len(tokens)):
         token = tokens[i]
         if token.kind == elements.kind.xml:
-            node = struct(
-                label = token.label,
-                content = None,
-                children = [])
-            path[-1].children.append(node)
+            path[-1].children.append(xml.new_node(label = token.label))
         elif token.kind == elements.kind.start:
             next = tokens[i+1]
             if next.label == token.label and next.kind == elements.kind.end:
-                content = xml[next.start - next.skipped:next.start]
+                content = xml_text[next.start - next.skipped:next.start]
                 # No child elements, so treat the prefix of the next token as CNAME content.
-                node = struct(
-                    label = token.label,
-                    content = content,
-                    children = [])
+                node = xml.new_node(label = token.label, content = content)
             else:
                 # Has child elements, so ignore text content
-                node = struct(
-                    label = token.label,
-                    content = None,
-                    children = [])
+                node = xml.new_node(label = token.label, children = [])
             path[-1].children.append(node)
             path.append(node)
         elif token.kind == elements.kind.end:
             popped = path.pop()
             if popped.label != token.label:
                 fail("Unbalanced xml tree: closing tag </%s> incorrectly matched with <%s> in xml %s." % (
-                    token.label, popped.label, xml))
+                    token.label, popped.label, xml_text))
         elif token.kind == elements.kind.empty:
-            node = struct(
-                label = token.label,
-                content = None,
-                children = [])
-            path[-1].children.append(node) # Attach, but don't bother to push/pop.
+            path[-1].children.append(xml.new_node(label = token.label)) # Attach, but don't bother to push/pop.
         prev = token
     return root
 
@@ -259,6 +263,8 @@ elements = struct(
 
 xml = struct(
     parse = _parse,
+    new_node = _new_node,
+    find_first = _find_first,
 )
 
 for_testing = struct(

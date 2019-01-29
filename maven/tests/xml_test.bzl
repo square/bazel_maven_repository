@@ -132,6 +132,26 @@ def parse_test(env):
     root = xml.parse(XML_DOC)
     asserts.equals(env, 2, len(root.children))
 
+def find_first_test(env):
+    root = xml.parse(XML_DOC)
+    foo = xml.find_first(root, "foo")
+
+    bar = xml.find_first(foo, "bar")
+    asserts.equals(env, 0, len(bar.children))
+    asserts.equals(env, "4.0.0", bar.content)
+
+    blah = xml.find_first(foo, "blah")
+    asserts.equals(env, 1, len(blah.children))
+    asserts.equals(env, None, blah.content)
+
+def find_first_path_test(env):
+    root = xml.parse(XML_DOC)
+    baz = xml.find_first(root, "foo", "blah", "baz")
+
+    asserts.equals(env, "baz", baz.label)
+    asserts.equals(env, 0, len(baz.children))
+    asserts.equals(env, None, baz.content)
+
 
 TESTS = [
     next_element_basic_test,
@@ -142,6 +162,8 @@ TESTS = [
     greater_than_in_attribute_test,
     element_token_array_test,
     parse_test,
+    find_first_test,
+    find_first_path_test,
 ]
 
 # Roll-up function.

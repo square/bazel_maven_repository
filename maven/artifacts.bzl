@@ -83,6 +83,7 @@ def _annotate_artifact(artifact):
         maven_target_name = maven_target_name,
         third_party_target_name = artifact_id_munged,
         path = path,
+        group_path = group_path,
         pom = pom,
         original_spec = artifact.original_spec,
         group_id = artifact.group_id,
