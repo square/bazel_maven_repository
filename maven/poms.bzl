@@ -132,7 +132,7 @@ def _parse(xml_text):
     for node in root.children:
         if node.label == labels.PROJECT:
             return node
-    fail("No <project> tag found in supplied xml: %s" % xml)
+    fail("No <project> tag found in supplied xml: %s" % xml_text)
 
 # A pom-specific node-merge algorith,
 def _merge_content_last_wins(a, b):
