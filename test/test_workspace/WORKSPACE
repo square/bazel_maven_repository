@@ -1,48 +1,46 @@
 workspace(name = "test_workspace")
 
 # Set up maven
-local_repository(name = "maven_repository_rules", path = "../..")
-load("@maven_repository_rules//maven:maven.bzl", "maven_repository_specification")
-load(
-    ":build_substitution_templates.bzl",
-    "DAGGER_BUILD_SUBSTITUTE_WITH_PLUGIN",
-    "GOOGLE_JAVA_FORMAT_BUILD_SUBSTITUTE",
+local_repository(
+    name = "maven_repository_rules",
+    path = "../..",
 )
+
+load("@maven_repository_rules//maven:maven.bzl", "maven_repository_specification")
+load(":build_substitution_templates.bzl", "DAGGER_BUILD_SUBSTITUTE_WITH_PLUGIN")
 
 maven_repository_specification(
     name = "maven",
     artifacts = {
         # This is the proper way to specify an artifact
-        "com.google.guava:guava:25.0-jre": { "sha256": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9" },
-        "com.google.dagger:dagger:2.20":   { "sha256": "d37a556d8d57e2428c20e222b95346512d11fcf2174d581489a69a1439b886fb" },
+        "com.google.guava:guava:25.0-jre": {"sha256": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9"},
+        "com.google.dagger:dagger:2.20": {"sha256": "d37a556d8d57e2428c20e222b95346512d11fcf2174d581489a69a1439b886fb"},
         # This is how you specify an artifact that has no hash.  You must either supply a sha256 hash of the jar file
         # or specify that the dep is insecure.
-        "com.google.dagger:dagger-compiler:2.20":              { "insecure": True },
-        "com.google.dagger:dagger-producers:2.20":             { "insecure": True },
-        "com.google.dagger:dagger-spi:2.20":                   { "insecure": True },
-        "com.google.code.findbugs:jsr305:3.0.2":               { "insecure": True },
-        "com.google.errorprone:javac-shaded:9+181-r4173-1":    { "insecure": True },
-        "com.google.googlejavaformat:google-java-format:1.6":  { "insecure": True },
-        "com.squareup:javapoet:1.11.1":                        { "insecure": True },
-        "org.checkerframework:checker-compat-qual:2.5.5":      { "insecure": True },
-        "javax.annotation:jsr250-api:1.0":                     { "insecure": True },
-        "javax.inject:javax.inject:1":                         { "insecure": True },
-        "junit:junit:4.13-beta-1":                             { "insecure": True },
-        "com.google.errorprone:error_prone_annotations:2.1.3": { "insecure": True },
-        "com.google.j2objc:j2objc-annotations:1.1":            { "insecure": True },
-        "org.codehaus.mojo:animal-sniffer-annotations:1.14":   { "insecure": True },
-        "org.hamcrest:hamcrest-core:1.3":                      { "insecure": True },
+        "com.google.dagger:dagger-compiler:2.20": {"insecure": True},
+        "com.google.dagger:dagger-producers:2.20": {"insecure": True},
+        "com.google.dagger:dagger-spi:2.20": {"insecure": True},
+        "com.google.code.findbugs:jsr305:3.0.2": {"insecure": True},
+        "com.google.errorprone:javac-shaded:9+181-r4173-1": {"insecure": True},
+        "com.google.googlejavaformat:google-java-format:1.6": {"insecure": True},
+        "com.squareup:javapoet:1.11.1": {"insecure": True},
+        "org.checkerframework:checker-compat-qual:2.5.5": {"insecure": True},
+        "javax.annotation:jsr250-api:1.0": {"insecure": True},
+        "javax.inject:javax.inject:1": {"insecure": True},
+        "junit:junit:4.13-beta-1": {"insecure": True},
+        "com.google.errorprone:error_prone_annotations:2.1.3": {"insecure": True},
+        "com.google.j2objc:j2objc-annotations:1.1": {"insecure": True},
+        "org.codehaus.mojo:animal-sniffer-annotations:1.14": {"insecure": True},
+        "org.hamcrest:hamcrest-core:1.3": {"insecure": True},
+    },
+    build_substitutes = {
+        "com.google.dagger:dagger": DAGGER_BUILD_SUBSTITUTE_WITH_PLUGIN.format(dagger_version = "2.20"),
     },
     dependency_target_substitutes = {
         # Because we rewrite dagger -> dagger_api (and make a wrapper target "dagger" that exports the dagger
         # annotation processor) we need to rewrite the internal dependencies inside the com/google/dagger package
         # to reflect this.
         # "groupId": { "full bazel target": "full alternate target" }
-        "com.google.dagger": { "@maven//com/google/dagger:dagger": "@maven//com/google/dagger:dagger_api" },
+        "com.google.dagger": {"@maven//com/google/dagger:dagger": "@maven//com/google/dagger:dagger_api"},
     },
-    build_substitutes = {
-        "com.google.dagger:dagger": DAGGER_BUILD_SUBSTITUTE_WITH_PLUGIN.format(dagger_version = "2.20"),
-        "com.google.googlejavaformat:google-java-format": GOOGLE_JAVA_FORMAT_BUILD_SUBSTITUTE,
-    }
 )
-

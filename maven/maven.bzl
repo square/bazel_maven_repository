@@ -128,7 +128,7 @@ def _get_effective_pom(inheritance_chain):
         merged = poms.merge_parent(parent = merged, child = next)
     return merged
 
-def _get_dependencies_from_pom_files(ctx, artifact, group_path):
+def _get_dependencies_from_pom_files(ctx, artifact):
     inheritance_chain = _get_inheritance_chain(ctx, _fetch_pom(ctx, artifact))
     project = _get_effective_pom(inheritance_chain)
     maven_deps = poms.extract_dependencies(project)
@@ -174,7 +174,7 @@ def _generate_maven_repository_impl(ctx):
             artifact = artifacts.annotate(artifacts.parse_spec(spec))
             coordinates = "%s:%s" % (artifact.group_id, artifact.artifact_id)
             sets.add(processed_artifacts, coordinates)
-            maven_deps = _get_dependencies_from_pom_files(ctx, artifact, group_path)
+            maven_deps = _get_dependencies_from_pom_files(ctx, artifact)
             maven_deps = [x for x in maven_deps if _should_include_dependency(x)]
             found_artifacts = {}
             bazel_deps = []
