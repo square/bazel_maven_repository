@@ -47,7 +47,7 @@ a repository.
 
 Currently `.aar` and `.jar` artifacts are supported.  OSGI bundles are supported by assuming they are
 normal `.jar` artifacts (which they are, just have a packaging property of `bundle` and some extra
-metadata in META-INF of the `.jar` file).
+metadata in `META-INF` of the `.jar` file).
 
 `.aar` artifacts should be specified as `"some.group:some-artifact:1.0:aar"` (just append `:aar`
 onto the artifact spec string). 
