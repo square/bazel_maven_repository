@@ -23,7 +23,7 @@ MAVEN_REPOSITORY_RULES_VERSION = "1.0-rc2"
 MAVEN_REPOSITORY_RULES_SHA = "db73debcdd6b1a593e9ff44932fbeaf5c9b00ec829fa02cd00b646fe53b8e8ba"
 http_archive(
     name = "maven_repository_rules",
-    urls = ["https://github.com/israfil/bazel_maven_repository/archive/%s.zip" % MAVEN_REPOSITORY_RULES_VERSION],
+    urls = ["https://github.com/square/bazel_maven_repository/archive/%s.zip" % MAVEN_REPOSITORY_RULES_VERSION],
     type = "zip",
     strip_prefix = "bazel_maven_repository-%s" % MAVEN_REPOSITORY_RULES_VERSION,
     sha256 = MAVEN_REPOSITORY_RULES_SHA,
