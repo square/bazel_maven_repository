@@ -3,12 +3,12 @@
 A bazel ruleset creating a more idiomatic bazel representation of a maven repo using a
 pinned list of artifacts.
 
-Release: `0.4 (Beta 3)`
+Release: `1.0-rc1`
 
 | Link | Sha |
 | ---- | --- |
-| [Zip File](https://github.com/israfil/bazel_maven_repository/archive/0.4.zip) | `1d8a3f655a6eb087335eca306e2cd95f795773cb0517a62eafc201c7a8f81156` |
-| [Tarball](https://github.com/israfil/bazel_maven_repository/archive/0.4.tar.gz) | `104f63e50d7dd82f8bc08f5b78423a551e715112dea810c126f4ee2012f80079` |
+| [Zip File](https://github.com/square/bazel_maven_repository/archive/1.0-rc1.zip) | `68b3a175411de6c1f559f9936e75464f252ac08beb97b8477e0e6b0febc6ea2f` |
+| [Tarball](https://github.com/square/bazel_maven_repository/archive/1.0-rc1.tar.gz) | `ba1cc3ddc3e1124478da7d9cac271bf989b445a8e22c931d54be09ff4854ff90` |
 
 
 ## Overview
@@ -19,8 +19,8 @@ namespace.  The name of the repository specification rule becomes the repository
 For instance the following specification:
  
 ```python
-MAVEN_REPOSITORY_RULES_VERSION = "0.2"
-MAVEN_REPOSITORY_RULES_SHA = "aeb31a44ee8bbd02bf88b2dd96e64f48934f8f3301032d1de2c0f5137a0c713b"
+MAVEN_REPOSITORY_RULES_VERSION = "1.0-rc1"
+MAVEN_REPOSITORY_RULES_SHA = "68b3a175411de6c1f559f9936e75464f252ac08beb97b8477e0e6b0febc6ea2f"
 http_archive(
     name = "maven_repository_rules",
     urls = ["https://github.com/israfil/bazel_maven_repository/archive/%s.zip" % MAVEN_REPOSITORY_RULES_VERSION],
@@ -31,11 +31,8 @@ http_archive(
 load("@maven_repository_rules//maven:maven.bzl", "maven_repository_specification")
 maven_repository_specification(
     name = "maven",
-    insecure_artifacts = [
-        "com.google.dagger:dagger:1.4",
-    ],
     artifacts = {
-        "com.google.guava:guava:25.0-jre": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9",
+        "com.google.guava:guava:25.0-jre": { "sha256": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9" },
     }
 )
 ```
@@ -56,9 +53,6 @@ All artifacts, even transitively depended-on ones, need to be specified with pin
 `artifacts` property, and any artifacts discovered in the inferred dependency search, which are not
 present in the main rule's artifact list will be flagged and the build will fail with an error listing
 them.
-
-> Note: This currently doesn't support inherited or implicit version numbers, which is a forthcoming
-> feature.
 
 ## Coordinate Translation
 
@@ -104,26 +98,35 @@ java_library(
 > workspaces are available in `bazel-yourworkspace/external`).  The package structure can be
 > inspected if it is confusing.
 
-## Sha verification
+## Artifact Configuration
+### Sha verification
 
-Artifacts with SHA headers can be added to `artifacts`, in the form:
-`{ "group_id:artifact_id:version": "sha" }`. Artifacts without SHA headers should be added
-to `insecure_artifacts` in the form `[ "group_id:artifact_id:version" ]`
+Artifacts with SHA256 checksums can be added to `artifacts`, in the form:
+```
+    artifacts = {
+        "com.google.guava:guava:25.0-jre": { "sha256": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9" },
+    }
+```
+Artifacts without SHA headers should configured as insecure, like so:
+```
+    artifacts = {
+        "com.google.guava:guava:25.0-jre": { "insecure": True },
+    }
+```
 
-The rules will reject artifacts without SHAs that do not go through the `insecure_artifacts`. This
-only serves a documentary purpose and it is the responsibility of the project maintainer to do any
-off-line validation that the SHA hashes are the properly published hashes.
+The rules will reject artifacts without SHAs are not marked as "insecure". 
 
-## Variation
+> Note: These rules cannot validate that the checksum is the right one, only that the one supplied
+> in configuration matches the checksum of the file downloaded.  It is the responsibility of the
+> maintainer to use proper security practices and obtain the expected checksum from a trusted source.
 
 ### Substitution of build targets
 
-One can provide a `BUILD.bazel file snippet` that will be substituted for the auto-generated target
+One can provide a `BUILD.bazel` target snippet that will be substituted for the auto-generated target
 implied by a maven artifact.  This is very useful for providing an annotation-processor-exporting
 alternative target.  The substitution is naive, so the string needs to be appropriate and any rules
 need to be correct, contain the right dependencies, etc.  To aid that it's also possible to (on a
 per-package basis) substitute dependencies on a given fully-qualified bazel target for another. 
-
 
 A simple use-case would be to substitute a target name (e.g. "mockito-core" -> "mockito") for
 cleaner/easier use in bazel:
@@ -133,10 +136,10 @@ MOCKITO_BUILD_SNIPPET = """maven_jvm_artifact(name = "mockito", artifact = "org.
 
 maven_repository_specification(
     name = "maven",
-    insecure_artifacts = [
-        "org.mockito:mockito-core:2.20.1",
+    artifacts = {
+        "org.mockito:mockito-core:2.20.1": { "sha256": "blahblahblah" },
         # ... all the other deps.
-    ],
+    },
     build_substitutes = {
         "org.mockito:mockito-core": MOCKITO_BUILD_SNIPPET,
     }
@@ -178,20 +181,20 @@ java_plugin(
 
 The above is given as a substitution in the `maven_repository_specification()` rule.  However, since the inferred
 dependencies of `:dagger-compiler` would create a dependency cycle because it includes `:dagger` as a dep, the
-specification rule also should include a dependency_target_substitution, to ensures that the inferred rules in
+specification rule also should include a `dependency_target_substitution`, to ensures that the inferred rules in
 the generated `com/google/dagger/BUILD` file consume `:dagger_api` instead of the wrapper replacement target.
 
 ```python
 maven_repository_specification(
     name = "maven",
-    insecure_artifacts = [
-        "com.google.dagger:dagger:2.20",
-        "com.google.dagger:dagger-compiler:2.20",
-        "com.google.dagger:dagger-producers:2.20",
-        "com.google.dagger:dagger-spi:2.20",
-        "com.google.code.findbugs:jsr305:3.0.2",
+    artifacts = {
+        "com.google.dagger:dagger:2.20": { "sha256": "blahblahblah" },
+        "com.google.dagger:dagger-compiler:2.20": { "sha256": "blahblahblah" },
+        "com.google.dagger:dagger-producers:2.20": { "sha256": "blahblahblah" },
+        "com.google.dagger:dagger-spi:2.20": { "sha256": "blahblahblah" },
+        "com.google.code.findbugs:jsr305:3.0.2": { "sha256": "blahblahblah" },
         # ... all the other deps.
-    ],
+    ]},
     build_substitutes = {
         "com.google.dagger:dagger": DAGGER_PROCESSOR_SNIPPET,
     },
@@ -226,8 +229,10 @@ Classifiers are tacked on the end, e.g. `"foo.bar:blah:1.0:jar:some-classifier"`
  
 ## Limitations
 
-This doesn't support parent-inherited metadata, nor versions obtained from `<properties>` or
-`<dependencyManagement> sections` at this point.  This may be added in future releases.
+  * Doesn't support -SNAPSHOT dependencies, but will in a future version.
+  * Doesn't support multiple versions of a dependency (by design).
+  * Doesn't support multiple calls to `maven_repository_specification()` due to collisions in
+    the implicit fetching rules it creates. This limitation will be lifted in a version.
 
 ## Other Usage Notes
 
