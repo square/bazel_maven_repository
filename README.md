@@ -43,6 +43,19 @@ maven_repository_specification(
 Dependency versions are resolved in the single artifact list.  Only one version is permitted within
 a repository.
 
+## Supported Types
+
+Currently `.aar` and `.jar` artifacts are supported.  OSGI bundles are supported by assuming they are
+normal `.jar` artifacts (which they are, just have a packaging property of `bundle` and some extra
+metadata in `META-INF` of the `.jar` file).
+
+`.aar` artifacts should be specified as `"some.group:some-artifact:1.0:aar"` (just append `:aar`
+onto the artifact spec string). 
+
+For any other types, please file a feature request, or supply a pull request.  So long as there
+exists a proper bazel import or library rule to bring the artifact's file into bazel's dependency
+graph, it should be possible to support it.
+
 ## Inter-artifact dependencies
 
 This rule will, in the generated repository, infer inter-artifact dependencies from pom.xml files
