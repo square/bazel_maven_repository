@@ -7,8 +7,8 @@ Release: `1.0-rc2`
 
 | Link | Sha |
 | ---- | --- |
-| [Zip File](https://github.com/square/bazel_maven_repository/archive/1.0-rc2.zip) | `db73debcdd6b1a593e9ff44932fbeaf5c9b00ec829fa02cd00b646fe53b8e8ba` |
-| [Tarball](https://github.com/square/bazel_maven_repository/archive/1.0-rc2.tar.gz) | `b8173f4d6c0c39cb13c259d8713f84051b529b4475cef04e8ee3d74cb26a30e7` |
+| [Zip File](https://github.com/square/bazel_maven_repository/archive/1.0-rc2.zip) | `8f71101c8dc252f64b35688a3fd2cf328bfaca412f8c82d386dff4aa0e1cf40f` |
+| [Tarball](https://github.com/square/bazel_maven_repository/archive/1.0-rc2.tar.gz) | `51d0996c104791f00bfccb57400ae36acea27b81e91d7cf770e29f23bcd1ee7f` |
 
 
 ## Overview
