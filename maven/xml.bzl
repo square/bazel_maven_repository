@@ -100,9 +100,12 @@ def _find_element_end(xml, tag_start_index):
 def _find_element_start(xml, start_from):
     cursor = xml.find("<", start_from)
     if cursor == -1:
-        return -1 # no more tags in this text.
+        return -1 # no more xml elements in this text.
 
-    # Scan for comments.
+    # Scan for comments and CDATA sections between elements.
+    # Note these are similar, but slightly different, as comment scanning needs to check
+    # for "--" within the comment, which is invalid. CNAMEs just end when ]]> is found, but
+    # ]] is valid.
     for _ in range(cursor, len(xml)):
         # Need to check for multiple comment sections.
         if len(xml) - cursor > 4 and xml[cursor:cursor+4] == "<!--":
@@ -112,17 +115,28 @@ def _find_element_start(xml, start_from):
                 if xml[cursor] == "-" and xml[cursor+1] == "-":
                     # maybe comment end?
                     if xml[cursor+2] == ">":
-                        cursor +=3
-                        cursor = xml.find("<", cursor)
+                        # found comment end
+                        cursor = xml.find("<", cursor + 3)
                         if cursor == -1:
                             return -1 # no more tags in this text.
-                        break # Found comment end, reset start and cursor and break
+                        break
                     else:
                         fail("XML comments may not contain the string \"--\". %s" % xml)
                 else:
                     cursor += 1
+        elif len(xml) - cursor > 9 and xml[cursor:cursor+9] == "<![CDATA[":
+            cursor += 9
+            # Found a CDATA section, scan forward to the CEND.
+            for _ in range(cursor, len(xml)):
+                if cursor+3 <= len(xml) and xml[cursor:cursor+3] == "]]>":
+                    cursor = xml.find("<", cursor + 3)
+                    if cursor == -1:
+                        return -1 # no more xml elements in this text.
+                    break # Found CEND, reset start and cursor and break
+                else:
+                    cursor += 1
         else:
-            return cursor
+            break
     return cursor
 
 # Description
@@ -130,13 +144,15 @@ def _find_element_start(xml, start_from):
 #    The start/end are relative to the start of the xml string, not the substring start index,
 #    but the search is constrained to the substring.
 #
-#    This implementation skips over xml comment sections, which are NOT represented as a element
+#    This implementation skips over xml comment sections, which are NOT represented as a element, and
+#    CNAME sections, which are also not represented as an element.  This is technically incorrect, as
+#    CNAME sections are part of the XML document, but we are not handling them.
 #
 #    Note: this is a bit inefficient, creating two structs, but the code to do it in one was unreadable.
 def _next_element(xml, start_from = 0):
     start = _find_element_start(xml, start_from)
     if start == -1:
-        return None # no more tags in this text.
+        return None # no more xml elmements in this text.
 
     tag_internals = _find_element_end(xml, start)
     label = tag_internals.label
