@@ -68,7 +68,7 @@ def _fetch_artifact_impl(ctx):
     ctx.download(url = ctx.attr.urls, output = local_path, sha256 = ctx.attr.sha256)
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
     ctx.file(
-        "%s/BUILD" % _DOWNLOAD_PREFIX,
+        "%s/BUILD.bazel" % _DOWNLOAD_PREFIX,
         _ARTIFACT_DOWNLOAD_BUILD_FILE_TEMPLATE.format(prefix = _DOWNLOAD_PREFIX, path = ctx.attr.local_path),
     )
 
@@ -163,7 +163,7 @@ def _generate_maven_repository_impl(ctx):
     repository_root_path = ctx.path(".")
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
 
-    # Generate the per-group_id BUILD files.
+    # Generate the per-group_id BUILD.bazel files.
     build_snippets = ctx.attr.build_snippets
     target_substitutes = dicts.decode_nested(ctx.attr.dependency_target_substitutes)
     processed_artifacts = sets.new()
@@ -215,7 +215,7 @@ def _generate_maven_repository_impl(ctx):
                         artifact_coordinates = artifact.original_spec,
                     )
                 )
-        file = "%s/BUILD" % group_path
+        file = "%s/BUILD.bazel" % group_path
         content = "\n".join([prefix] + target_definitions)
         ctx.file(file, content)
 
@@ -352,7 +352,7 @@ def _maven_repository_specification(
     for artifact_spec, properties in artifact_declarations.items():
         artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
 
-        # Track group_ids in order to build per-group BUILD files.
+        # Track group_ids in order to build per-group BUILD.bazel files.
         grouped_artifacts[artifact.group_id] = (
             grouped_artifacts.get(artifact.group_id, default = []) + [artifact.original_spec]
         )
