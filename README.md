@@ -43,6 +43,9 @@ maven_repository_specification(
 Dependency versions are resolved in the single artifact list.  Only one version is permitted within
 a repository.
 
+> Note: bazel_maven_repository has no workspace dependencies, so adding it to your project will not
+> result in any additional bazel repositories to be fetched.
+
 ## Supported Types
 
 Currently `.aar` and `.jar` artifacts are supported.  OSGI bundles are supported by assuming they are
