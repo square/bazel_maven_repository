@@ -19,6 +19,15 @@ load(":utils.bzl", "dicts", "paths", "strings")
 load(":artifacts.bzl", "artifacts")
 load(":poms.bzl", "poms")
 
+
+#enum
+artifact_config_properties = struct(
+    SHA256 = "sha256",
+    INSECURE = "insecure",
+    BUILD_SNIPPET = "build_snippet",
+    values = ["sha256", "insecure", "build_snippet"],
+)
+
 _DOWNLOAD_PREFIX = "maven"
 _RUNTIME_DEPENDENCY_SCOPES = sets.new("compile", "runtime")
 _POM_XPATH_DEPENDENCIES_QUERY = """/project/dependencies/dependency[not(scope) or scope/text()="compile"]"""
@@ -32,6 +41,8 @@ Please pass in a dictionary for the artifact like this:
 artifacts = {
     "%s": { "sha256" : "%s" }
 }"""
+_LEGACY_BUILD_SUBSTITUTIONS_DEPRECATION_WARNING = """WARNING: Passing the build snippet via build_substitutes is deprecated.
+Please pass the snippet for %s as a configuration property in the artifact dictionary."""
 _ARTIFACT_DOWNLOAD_BUILD_FILE_TEMPLATE = """
 package(default_visibility = ["//visibility:public"])
 filegroup(
@@ -153,7 +164,7 @@ def _generate_maven_repository_impl(ctx):
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
 
     # Generate the per-group_id BUILD files.
-    build_substitutes = ctx.attr.build_substitutes
+    build_snippets = ctx.attr.build_snippets
     target_substitutes = dicts.decode_nested(ctx.attr.dependency_target_substitutes)
     processed_artifacts = sets.new()
     for specs in ctx.attr.grouped_artifacts.values():
@@ -174,35 +185,36 @@ def _generate_maven_repository_impl(ctx):
             artifact = artifacts.annotate(artifacts.parse_spec(spec))
             coordinates = "%s:%s" % (artifact.group_id, artifact.artifact_id)
             sets.add(processed_artifacts, coordinates)
-            maven_deps = _get_dependencies_from_pom_files(ctx, artifact)
-            maven_deps = [x for x in maven_deps if _should_include_dependency(x)]
-            found_artifacts = {}
-            bazel_deps = []
-            for dep in maven_deps:
-                found_artifacts[dep.coordinate] = dep
-                bazel_deps += [_convert_maven_dep(ctx.attr.name, dep)]
-            normalized_deps = [_normalize_target(x, group_path, package_target_substitutes) for x in bazel_deps]
-            unregistered = sets.difference(processed_artifacts, sets.copy_of(found_artifacts))
-            if bool(unregistered) and not bool(build_substitutes.get(coordinates)):
-                unregistered_deps = [
-                    poms.format_dependency(x)
-                    for x in maven_deps
-                    if sets.contains(unregistered, x.coordinate)
-                ]
-                fail("Some dependencies of %s were not pinned in the artifacts list:\n%s" % (
-                    spec,
-                    list(unregistered_deps),
-                ))
-            target_definitions += [
-                build_substitutes.get(
-                    coordinates,
+            snippet = build_snippets.get(coordinates, None)
+            if snippet:
+                target_definitions.append(snippet)
+            else:
+                maven_deps = _get_dependencies_from_pom_files(ctx, artifact)
+                maven_deps = [x for x in maven_deps if _should_include_dependency(x)]
+                found_artifacts = {}
+                bazel_deps = []
+                for dep in maven_deps:
+                    found_artifacts[dep.coordinate] = dep
+                    bazel_deps += [_convert_maven_dep(ctx.attr.name, dep)]
+                normalized_deps = [_normalize_target(x, group_path, package_target_substitutes) for x in bazel_deps]
+                unregistered = sets.difference(processed_artifacts, sets.copy_of(found_artifacts))
+                if bool(unregistered):
+                    unregistered_deps = [
+                        poms.format_dependency(x)
+                        for x in maven_deps
+                        if sets.contains(unregistered, x.coordinate)
+                    ]
+                    fail("Some dependencies of %s were not pinned in the artifacts list:\n%s" % (
+                        spec,
+                        list(unregistered_deps),
+                    ))
+                target_definitions.append(
                     _MAVEN_REPO_TARGET_TEMPLATE.format(
                         target = artifact.third_party_target_name,
                         deps = _deps_string(normalized_deps),
                         artifact_coordinates = artifact.original_spec,
-                    ),
-                ),
-            ]
+                    )
+                )
         file = "%s/BUILD" % group_path
         content = "\n".join([prefix] + target_definitions)
         ctx.file(file, content)
@@ -216,7 +228,7 @@ _generate_maven_repository = repository_rule(
         "repository_urls": attr.string_list(mandatory = True),
         "maven_rules_repository": attr.string(mandatory = False, default = "maven_repository_rules"),
         "dependency_target_substitutes": attr.string_list_dict(mandatory = True),
-        "build_substitutes": attr.string_dict(mandatory = True),
+        "build_snippets": attr.string_dict(mandatory = True),
     },
 )
 
@@ -250,10 +262,8 @@ def _check_for_duplicates(artifact_specs):
         elif sets.pop(versions).endswith("-SNAPSHOT"):
             fail("Snapshot versions are not supported in maven_artifacts.bzl.  Please fix %s to a pinned version." % artifact)
 
-_valid_artifact_spec_properties = sets.new("sha256", "insecure")
-
 def _unsupported_keys(keys_list):
-    return sets.difference(_valid_artifact_spec_properties, sets.copy_of(keys_list))
+    return sets.difference(sets.copy_of(artifact_config_properties.values), sets.copy_of(keys_list))
 
 def _fix_string_booleans(value):
     if type(value) == type(""):
@@ -274,21 +284,23 @@ def _validate_artifacts(artifact_definitions):
             errors += ["""Artifact %s has unsupported property keys: %s. Only %s are supported""" % (
                 spec,
                 list(unsupported_keys),
-                list(_valid_artifact_spec_properties),
+                list(artifact_config_properties.values),
             )]
         artifact = artifacts.parse_spec(spec)  # Basic sanity check.
         if not bool(artifact.version):
             errors += ["""Artifact "%s" missing version""" % spec]
-        if not properties.get("sha256", None) and not _fix_string_booleans(properties.get("insecure", False)):
+        if (not properties.get(artifact_config_properties.SHA256, None)
+            and not _fix_string_booleans(properties.get(artifact_config_properties.INSECURE, False))):
             errors += ["""Artifact "%s" is mising a sha256. Either supply it or mark it "insecure".""" % spec]
-        if properties.get("sha256", None) and _fix_string_booleans(properties.get("insecure", False)):
+        if (properties.get(artifact_config_properties.SHA256, None)
+            and _fix_string_booleans(properties.get(artifact_config_properties.INSECURE, False))):
             errors += ["""Artifact "%s" cannot be both insecure and have a sha256.  Specify one or the other.""" % spec]
     if bool(errors):
         fail("Errors found:\n    %s" % "\n    ".join(errors))
 
 # Pre-process the artifact_declarations dictionary and handle older APIs that are now deprecated, until we
 # delete them.
-def _handle_legacy_specifications(artifact_declarations, insecure_artifacts):
+def _handle_legacy_specifications(artifact_declarations, insecure_artifacts, build_snippets):
     # Legacy deprecated feature backwards compatibility
     for spec in insecure_artifacts:
         print(_INSECURE_DEPRECATION_WARNING % spec)
@@ -297,7 +309,19 @@ def _handle_legacy_specifications(artifact_declarations, insecure_artifacts):
         value = artifact_declarations[key]
         if type(value) == type(""):
             print(_STRING_SHA_VALUE_DEPRECATION_WARNING % (key, value))
-            artifact_declarations[key] = {"sha256": value}
+            artifact_declarations[key] = {artifact_config_properties.SHA256: value}
+    # map versioned artifacts to versionless
+    versionless_mapping = {}
+    for key in artifact_declarations:
+            artifact = artifacts.parse_spec(key)
+            versionless_mapping["%s:%s" % (artifact.group_id, artifact.artifact_id)] = key
+    for key, snippet in build_snippets.items():
+        versioned_key = versionless_mapping.get(key, None)
+        if not bool(versioned_key):
+            fail("Artifact %s listed in build_substitutions not present in main artifact list.", key)
+        config = artifact_declarations[versioned_key]
+        config[artifact_config_properties.BUILD_SNIPPET] = snippet
+        print(_LEGACY_BUILD_SUBSTITUTIONS_DEPRECATION_WARNING % versioned_key)
     return artifact_declarations
 
 # The implementation of maven_repository_specification.
@@ -313,7 +337,7 @@ def _maven_repository_specification(
         build_substitutes = {},
         dependency_target_substitutes = {},
         repository_urls = ["https://repo1.maven.org/maven2"]):
-    _handle_legacy_specifications(artifact_declarations, insecure_artifacts)
+    _handle_legacy_specifications(artifact_declarations, insecure_artifacts, build_substitutes)
 
     if len(repository_urls) == 0:
         fail("You must specify at least one repository root url.")
@@ -324,6 +348,7 @@ def _maven_repository_specification(
 
     _check_for_duplicates(artifact_declarations)
     grouped_artifacts = {}
+    build_snippets = {}
     for artifact_spec, properties in artifact_declarations.items():
         artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
 
@@ -331,7 +356,7 @@ def _maven_repository_specification(
         grouped_artifacts[artifact.group_id] = (
             grouped_artifacts.get(artifact.group_id, default = []) + [artifact.original_spec]
         )
-        sha256 = properties.get("sha256", None)
+        sha256 = properties.get(artifact_config_properties.SHA256, None)
         urls = ["%s/%s" % (repo, artifact.path) for repo in repository_urls]
         _fetch_artifact(
             name = artifact.maven_target_name,
@@ -339,6 +364,10 @@ def _maven_repository_specification(
             local_path = artifact.path,
             sha256 = sha256,
         )
+        snippet = properties.get(artifact_config_properties.BUILD_SNIPPET, None)
+        if bool(snippet):
+            build_snippets["%s:%s" % (artifact.group_id, artifact.artifact_id)] = snippet
+
 
     # Skylark rules can't take in arbitrarily deep dicts, so we rewrite dict(string->dict(string, string)) to an
     # encoded (but trivially splittable) dict(string->list(string)).  Yes it's gross.
@@ -349,7 +378,7 @@ def _maven_repository_specification(
         grouped_artifacts = grouped_artifacts,
         repository_urls = repository_urls,
         dependency_target_substitutes = dependency_target_substitutes_rewritten,
-        build_substitutes = build_substitutes,
+        build_snippets = build_snippets,
     )
 
 for_testing = struct(

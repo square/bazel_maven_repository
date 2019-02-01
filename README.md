@@ -132,17 +132,15 @@ A simple use-case would be to substitute a target name (e.g. "mockito-core" -> "
 cleaner/easier use in bazel:
 
 ```python
-MOCKITO_BUILD_SNIPPET = """maven_jvm_artifact(name = "mockito", artifact = "org.mockito:mockito-core:2.20.1")"""
-
 maven_repository_specification(
     name = "maven",
     artifacts = {
-        "org.mockito:mockito-core:2.20.1": { "sha256": "blahblahblah" },
+        "org.mockito:mockito-core:2.20.1": {
+            "sha256": "blahblahblah",
+            "build_snippet": """maven_jvm_artifact(name = "mockito", artifact = "org.mockito:mockito-core:2.20.1")""",
+        },
         # ... all the other deps.
     },
-    build_substitutes = {
-        "org.mockito:mockito-core": MOCKITO_BUILD_SNIPPET,
-    }
 )
 ```
 
@@ -188,15 +186,15 @@ the generated `com/google/dagger/BUILD` file consume `:dagger_api` instead of th
 maven_repository_specification(
     name = "maven",
     artifacts = {
-        "com.google.dagger:dagger:2.20": { "sha256": "blahblahblah" },
+        "com.google.dagger:dagger:2.20": {
+            "sha256": "blahblahblah",
+            "build_snippet": DAGGER_PROCESSOR_SNIPPET,
+        },
         "com.google.dagger:dagger-compiler:2.20": { "sha256": "blahblahblah" },
         "com.google.dagger:dagger-producers:2.20": { "sha256": "blahblahblah" },
         "com.google.dagger:dagger-spi:2.20": { "sha256": "blahblahblah" },
         "com.google.code.findbugs:jsr305:3.0.2": { "sha256": "blahblahblah" },
         # ... all the other deps.
-    ]},
-    build_substitutes = {
-        "com.google.dagger:dagger": DAGGER_PROCESSOR_SNIPPET,
     },
     dependency_target_substitutes = {
         "com.google.dagger": {"@maven//com/google/dagger:dagger": "@maven//com/google/dagger:dagger_api"},
