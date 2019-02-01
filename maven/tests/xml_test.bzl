@@ -85,7 +85,9 @@ XML_DOC = """
   <bar>4.0.0</bar>
   <qof foo="blah>foo" />
   <blah a="b">
-    <baz q="r" />
+    <baz q="r" /> <![CDATA[Some text before a link, which is here:
+                      <a href="http://squareup.com">Square, Inc.</a>
+                  ]]>
   </blah a="b">      </foo>
 """
 
