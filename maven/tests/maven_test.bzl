@@ -10,13 +10,21 @@ _FAKE_URL_PREFIX = "fake://maven"
 _FAKE_DOWNLOAD_PREFIX = "maven"
 
 def unsupported_keys_test(env):
-    asserts.equals(env, sets.new("foo", "bar"), for_testing.unsupported_keys(["foo", "sha256", "insecure", "bar"]))
+    asserts.equals(
+        env,
+        expected = sets.new("foo", "bar"),
+        actual = for_testing.unsupported_keys(["build_snippet","foo", "sha256", "insecure", "bar"]))
 
 def handle_legacy_sha_handling(env):
     asserts.equals(env,
-        expected = {"foo:bar:1.0": { "sha256": "abcdef"}},
-        actual = for_testing.handle_legacy_specifications({"foo:bar:1.0": "abcdef"}, []))
+        expected = {"foo:bar:1.0": { "sha256": "abcdef" }},
+        actual = for_testing.handle_legacy_specifications({"foo:bar:1.0": "abcdef"}, [], {}))
 
+def handle_legacy_build_snippet_handling(env):
+    asserts.equals(env,
+        expected = {"foo:bar:1.0": { "sha256": "abcdef", "build_snippet": "blah" }},
+        actual = for_testing.handle_legacy_specifications(
+            {"foo:bar:1.0": {"sha256": "abcdef"}}, [], {"foo:bar": "blah"}))
 
 # Set up fakes.
 def _fake_cat_for_get_pom_test(args):
@@ -84,6 +92,7 @@ def suite():
     return test_suite("maven processing", tests = [
         unsupported_keys_test,
         handle_legacy_sha_handling,
+        handle_legacy_build_snippet_handling,
         get_pom_test,
         get_parent_chain_test,
         get_effective_pom_test,
