@@ -3,12 +3,12 @@
 A bazel ruleset creating a more idiomatic bazel representation of a maven repo using a
 pinned list of artifacts.
 
-Release: `1.0-rc3`
+Release: `1.0-rc4`
 
 | Link | Sha |
 | ---- | --- |
-| [Zip File](https://github.com/square/bazel_maven_repository/archive/1.0-rc3.zip) | `f9aadfbcfe2cda220b188eb4acef259c7635cb0ee91ec1a1852b43d0d78624a7` |
-| [Tarball](https://github.com/square/bazel_maven_repository/archive/1.0-rc3.tar.gz) | `0cba91b2d705f6ce05f277990f441a9d4f85bd3ad2572d7043505aefc5fc522f` |
+| [Zip File](https://github.com/square/bazel_maven_repository/archive/1.0-rc4.zip) | `57357874e88da816857a8ec1f8e6ffa059161ac26fecdd35202e2488dba72d57` |
+| [Tarball](https://github.com/square/bazel_maven_repository/archive/1.0-rc4.tar.gz) | `5d23fbac0a0cc27fe10894c246934a8131f182e536e8123df2b942f811a59054` |
 
 
 ## Overview
@@ -19,8 +19,8 @@ namespace.  The name of the repository specification rule becomes the repository
 For instance the following specification:
  
 ```python
-MAVEN_REPOSITORY_RULES_VERSION = "1.0-rc3"
-MAVEN_REPOSITORY_RULES_SHA = "0cba91b2d705f6ce05f277990f441a9d4f85bd3ad2572d7043505aefc5fc522f"
+MAVEN_REPOSITORY_RULES_VERSION = "1.0-rc4"
+MAVEN_REPOSITORY_RULES_SHA = "57357874e88da816857a8ec1f8e6ffa059161ac26fecdd35202e2488dba72d57"
 http_archive(
     name = "maven_repository_rules",
     urls = ["https://github.com/square/bazel_maven_repository/archive/%s.zip" % MAVEN_REPOSITORY_RULES_VERSION],
