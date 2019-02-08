@@ -243,10 +243,11 @@ Classifiers are tacked on the end, e.g. `"foo.bar:blah:1.0:jar:some-classifier"`
  
 ## Limitations
 
-  * Doesn't support -SNAPSHOT dependencies, but will in a future version.
+  * Doesn't support -SNAPSHOT dependencies (#5)
   * Doesn't support multiple versions of a dependency (by design).
   * Doesn't support multiple calls to `maven_repository_specification()` due to collisions in
-    the implicit fetching rules it creates. This limitation will be lifted in a version.
+    the implicit fetching rules it creates. This limitation will be lifted in a version. (#6)
+  * Doesn't support -source.jar downloading and attachment. (#44)
 
 ## Other Usage Notes
 
