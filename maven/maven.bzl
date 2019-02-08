@@ -65,12 +65,12 @@ def _fetch_artifact_impl(ctx):
     download_path = ctx.path(local_path)
     if download_path in forbidden_files or not str(download_path).startswith(str(repository_root_path)):
         fail("Invalid local_path: %s" % ctx.attr.local_path)
-    ctx.download(url = ctx.attr.urls, output = local_path, sha256 = ctx.attr.sha256)
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
     ctx.file(
         "%s/BUILD.bazel" % _DOWNLOAD_PREFIX,
         _ARTIFACT_DOWNLOAD_BUILD_FILE_TEMPLATE.format(prefix = _DOWNLOAD_PREFIX, path = ctx.attr.local_path),
     )
+    ctx.download(url = ctx.attr.urls, output = local_path, sha256 = ctx.attr.sha256)
 
 _fetch_artifact = repository_rule(
     implementation = _fetch_artifact_impl,
