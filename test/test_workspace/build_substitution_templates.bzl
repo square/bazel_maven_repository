@@ -17,24 +17,21 @@
 #   maven_repository_specification(
 #       ...
 #       build_substitutes = {
-#           "com.google.dagger:dagger": DAGGER_BUILD_SUBSTITUTE_WITH_PLUGIN.format(dagger_version = "2.20"),
+#           "com.google.dagger:dagger": DAGGER_BUILD_SNIPPET_WITH_PLUGIN.format(version = "2.20"),
 #       }
 #   )
 #
-DAGGER_BUILD_SUBSTITUTE_WITH_PLUGIN = """
+DAGGER_BUILD_SNIPPET_WITH_PLUGIN = """
 java_library(
    name = "dagger",
-   exports = [
-       ":dagger_api",
-       "@maven//javax/inject:javax_inject",
-   ],
+   exports = [":dagger_api"],
    exported_plugins = [":dagger_plugin"],
    visibility = ["//visibility:public"],
 )
 
 maven_jvm_artifact(
    name = "dagger_api",
-   artifact = "com.google.dagger:dagger:{dagger_version}",
+   artifact = "com.google.dagger:dagger:{version}",
 )
 
 java_plugin(
@@ -42,5 +39,39 @@ java_plugin(
    processor_class = "dagger.internal.codegen.ComponentProcessor",
    generates_api = True,
    deps = [":dagger_compiler"],
+)
+"""
+
+# Description:
+#   Substitutes the naive maven_jvm_artifact for com.google.dagger:dagger with a flagor that exports the compiler
+#   plugin.  Contains the `dagger_version` substitution variable.
+#
+# Usage:
+#
+#   maven_repository_specification(
+#       ...
+#       build_substitutes = {
+#           "com.google.dagger:dagger": DAGGER_BUILD_SNIPPET_WITH_PLUGIN.format(version = "2.20"),
+#       }
+#   )
+#
+AUTO_VALUE_BUILD_SNIPPET_WITH_PLUGIN = """
+java_library(
+   name = "value",
+   exports = [":auto_value_annotations"],
+   exported_plugins = [":plugin"],
+   visibility = ["//visibility:public"],
+)
+
+maven_jvm_artifact(
+   name = "auto_value_processor",
+   artifact = "com.google.auto.value:auto-value:{version}",
+)
+
+java_plugin(
+   name = "plugin",
+   processor_class = "com.google.auto.value.processor.AutoValueProcessor",
+   generates_api = True,
+   deps = [":auto_value_processor"],
 )
 """
