@@ -1,0 +1,2 @@
+build --strategy=KotlinCompile=worker
+build --test_output=errors
