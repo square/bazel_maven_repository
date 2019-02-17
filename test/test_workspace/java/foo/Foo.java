@@ -1,7 +1,7 @@
 package foo;
 
+import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
-import java.util.List;
 import javax.inject.Inject;
 
 public class Foo {
@@ -21,10 +21,26 @@ public class Foo {
 
   @dagger.Component
   interface FooComponent {
-    Foo foo();
+    Bar bar();
 
     static FooComponent create() {
       return DaggerFoo_FooComponent.builder().build();
+    }
+  }
+
+
+  @AutoValue
+  static abstract class Inner {
+    public abstract Foo foo();
+
+    public static Builder builder() {
+      return new AutoValue_Foo_Inner.Builder();
+    }
+
+    @AutoValue.Builder
+    interface Builder {
+      Builder setFoo(Foo foo);
+      Inner build();
     }
   }
 }
