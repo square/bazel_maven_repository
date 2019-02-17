@@ -9,18 +9,8 @@
 #   so frequently.
 
 # Description:
-#   Substitutes the naive maven_jvm_artifact for com.google.dagger:dagger with a flagor that exports the compiler
-#   plugin.  Contains the `dagger_version` substitution variable.
-#
-# Usage:
-#
-#   maven_repository_specification(
-#       ...
-#       build_substitutes = {
-#           "com.google.dagger:dagger": DAGGER_BUILD_SNIPPET_WITH_PLUGIN.format(version = "2.20"),
-#       }
-#   )
-#
+#   Substitutes the naive maven_jvm_artifact for com.google.dagger:dagger with a wrapper that
+#   exports the compiler plugin.  Contains the `version` substitution variable.
 DAGGER_BUILD_SNIPPET_WITH_PLUGIN = """
 java_library(
    name = "dagger",
@@ -43,18 +33,12 @@ java_plugin(
 """
 
 # Description:
-#   Substitutes the naive maven_jvm_artifact for com.google.dagger:dagger with a flagor that exports the compiler
-#   plugin.  Contains the `dagger_version` substitution variable.
+#   Substitutes the naive maven_jvm_artifact for com.google.dagger:dagger with a wrapper that
+#   exports the processor plugin.  Contains the `version` substitution variable.
 #
-# Usage:
-#
-#   maven_repository_specification(
-#       ...
-#       build_substitutes = {
-#           "com.google.dagger:dagger": DAGGER_BUILD_SNIPPET_WITH_PLUGIN.format(version = "2.20"),
-#       }
-#   )
-#
+#   This is similar to the dagger substitution snippet, but the organization between the API target
+#   upon which one is to depend, and the plugin target is a bit different, and we want the resulting
+#   visible target to be different.
 AUTO_VALUE_BUILD_SNIPPET_WITH_PLUGIN = """
 java_library(
    name = "value",
