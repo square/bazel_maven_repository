@@ -233,16 +233,15 @@ _generate_maven_repository = repository_rule(
 )
 
 # Implementation of the maven_jvm_artifact rule.
-def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], exports = [], **kwargs):
+def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], **kwargs):
     artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
     maven_target = "@%s//%s:%s" % (artifact.maven_target_name, _DOWNLOAD_PREFIX, artifact.path)
     import_target = artifact.maven_target_name + "_import"
     target_name = name if name else artifact.third_party_target_name
-    deps = exports + deps  # A temporary hack since the existing some artifacts use exports instead of deps.
     if artifact.packaging == "jar":
         raw_jvm_import(name = target_name, deps = deps, visibility = visibility, jar = maven_target, **kwargs)
     elif artifact.packaging == "aar":
-        native.aar_import(name = target_name, deps = deps, exports = exports, visibility = visibility, aar = maven_target, **kwargs)
+        native.aar_import(name = target_name, deps = deps, visibility = visibility, aar = maven_target, **kwargs)
     else:
         fail("Packaging %s not supported by maven_jvm_artifact." % artifact.packaging)
 
@@ -267,7 +266,7 @@ def _unsupported_keys(keys_list):
 
 def _fix_string_booleans(value):
     if type(value) == type(""):
-        return value == "True" or value == "true"
+        return value.lower() == "true"
     return bool(value)
 
 # If artifact/sha pair has missing sha hashes, reject it.
@@ -393,9 +392,9 @@ for_testing = struct(
 ####################
 
 # Creates java or android library targets from maven_hosted .jar/.aar files.
-def maven_jvm_artifact(artifact, name = None, deps = [], exports = [], visibility = ["//visibility:public"], **kwargs):
+def maven_jvm_artifact(artifact, name = None, deps = [], visibility = ["//visibility:public"], **kwargs):
     # redirect to _maven_jvm_artifact, so we can externally use the name "artifact" but internally use artifact_spec
-    _maven_jvm_artifact(artifact_spec = artifact, name = name, deps = deps, exports = exports, visibility = visibility, **kwargs)
+    _maven_jvm_artifact(artifact_spec = artifact, name = name, deps = deps, visibility = visibility, **kwargs)
 
 # Description:
 #   Generates the bazel repo and download logic for each artifact (and repository URL prefixes) in the WORKSPACE

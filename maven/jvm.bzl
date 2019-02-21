@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2018 Square, Inc.
+# Copyright (C) 2019 Square, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -13,7 +13,8 @@
 
 # Description:
 #   A custom import rule that doesn't return an ijar, instead returning the raw .jar file as
-#   the "compile_jar".  This avoids issues with kotlin and inline functions.
+#   the "compile_jar".  This avoids issues with kotlin and inline functions.  Inspired by
+#   kt_jvm_import in bazelbuild/rules_kotlin.
 #   (see bazelbuild/bazel#4549)
 #
 def _raw_jvm_import(ctx):

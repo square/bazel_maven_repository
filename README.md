@@ -303,7 +303,7 @@ aware of other jvm languages' needs.
 #### rules_kotlin and maven integration paths
 
 [rules_kotlin] currently break when running in full sandbox mode (without the kotlin compilation
-worker).  Specifically, it misinterpretes paths in the sandbox.  Therefore, if using [rules_kotlin]
+worker).  Specifically, it misinterprets paths in the sandbox.  Therefore, if using [rules_kotlin]
 it is crucial to include `--strategy=KotlinCompile=worker` either on the command-line, or in the
 project's .bazelrc or your personal .bazelrc.  Otherwise, the annotation processor will fail to
 find the jar contents for annotation processors such as `Dagger 2` or `AutoValue` or `AutoFactory`.
