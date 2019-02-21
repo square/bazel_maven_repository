@@ -14,11 +14,11 @@
 # Description:
 #   A repository rule intended to be used in populating @maven_repository.
 #
+load(":artifacts.bzl", "artifacts")
+load(":jvm.bzl", "raw_jvm_import")
+load(":poms.bzl", "poms")
 load(":sets.bzl", "sets")
 load(":utils.bzl", "dicts", "paths", "strings")
-load(":artifacts.bzl", "artifacts")
-load(":poms.bzl", "poms")
-
 
 #enum
 artifact_config_properties = struct(
@@ -213,7 +213,7 @@ def _generate_maven_repository_impl(ctx):
                         target = artifact.third_party_target_name,
                         deps = _deps_string(normalized_deps),
                         artifact_coordinates = artifact.original_spec,
-                    )
+                    ),
                 )
         file = "%s/BUILD.bazel" % group_path
         content = "\n".join([prefix] + target_definitions)
@@ -233,16 +233,15 @@ _generate_maven_repository = repository_rule(
 )
 
 # Implementation of the maven_jvm_artifact rule.
-def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], exports = [], **kwargs):
+def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], **kwargs):
     artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
     maven_target = "@%s//%s:%s" % (artifact.maven_target_name, _DOWNLOAD_PREFIX, artifact.path)
     import_target = artifact.maven_target_name + "_import"
     target_name = name if name else artifact.third_party_target_name
-    exports = exports + deps  # A temporary hack since the existing third_party artifacts use exports instead of deps.
     if artifact.packaging == "jar":
-        native.java_import(name = target_name, deps = exports, exports = exports, visibility = visibility, jars = [maven_target], **kwargs)
+        raw_jvm_import(name = target_name, deps = deps, visibility = visibility, jar = maven_target, **kwargs)
     elif artifact.packaging == "aar":
-        native.aar_import(name = target_name, deps = exports, exports = exports, visibility = visibility, aar = maven_target, **kwargs)
+        native.aar_import(name = target_name, deps = deps, visibility = visibility, aar = maven_target, **kwargs)
     else:
         fail("Packaging %s not supported by maven_jvm_artifact." % artifact.packaging)
 
@@ -267,8 +266,7 @@ def _unsupported_keys(keys_list):
 
 def _fix_string_booleans(value):
     if type(value) == type(""):
-        if value != "True" or value != "true":
-            return False
+        return value.lower() == "true"
     return bool(value)
 
 # If artifact/sha pair has missing sha hashes, reject it.
@@ -289,11 +287,11 @@ def _validate_artifacts(artifact_definitions):
         artifact = artifacts.parse_spec(spec)  # Basic sanity check.
         if not bool(artifact.version):
             errors += ["""Artifact "%s" missing version""" % spec]
-        if (not properties.get(artifact_config_properties.SHA256, None)
-            and not _fix_string_booleans(properties.get(artifact_config_properties.INSECURE, False))):
+        if (not properties.get(artifact_config_properties.SHA256, None) and
+            not _fix_string_booleans(properties.get(artifact_config_properties.INSECURE, False))):
             errors += ["""Artifact "%s" is mising a sha256. Either supply it or mark it "insecure".""" % spec]
-        if (properties.get(artifact_config_properties.SHA256, None)
-            and _fix_string_booleans(properties.get(artifact_config_properties.INSECURE, False))):
+        if (properties.get(artifact_config_properties.SHA256, None) and
+            _fix_string_booleans(properties.get(artifact_config_properties.INSECURE, False))):
             errors += ["""Artifact "%s" cannot be both insecure and have a sha256.  Specify one or the other.""" % spec]
     if bool(errors):
         fail("Errors found:\n    %s" % "\n    ".join(errors))
@@ -310,11 +308,12 @@ def _handle_legacy_specifications(artifact_declarations, insecure_artifacts, bui
         if type(value) == type(""):
             print(_STRING_SHA_VALUE_DEPRECATION_WARNING % (key, value))
             artifact_declarations[key] = {artifact_config_properties.SHA256: value}
+
     # map versioned artifacts to versionless
     versionless_mapping = {}
     for key in artifact_declarations:
-            artifact = artifacts.parse_spec(key)
-            versionless_mapping["%s:%s" % (artifact.group_id, artifact.artifact_id)] = key
+        artifact = artifacts.parse_spec(key)
+        versionless_mapping["%s:%s" % (artifact.group_id, artifact.artifact_id)] = key
     for key, snippet in build_snippets.items():
         versioned_key = versionless_mapping.get(key, None)
         if not bool(versioned_key):
@@ -368,7 +367,6 @@ def _maven_repository_specification(
         if bool(snippet):
             build_snippets["%s:%s" % (artifact.group_id, artifact.artifact_id)] = snippet
 
-
     # Skylark rules can't take in arbitrarily deep dicts, so we rewrite dict(string->dict(string, string)) to an
     # encoded (but trivially splittable) dict(string->list(string)).  Yes it's gross.
     dependency_target_substitutes_rewritten = dicts.encode_nested(dependency_target_substitutes)
@@ -394,9 +392,9 @@ for_testing = struct(
 ####################
 
 # Creates java or android library targets from maven_hosted .jar/.aar files.
-def maven_jvm_artifact(artifact, name = None, deps = [], exports = [], visibility = ["//visibility:public"], **kwargs):
+def maven_jvm_artifact(artifact, name = None, deps = [], visibility = ["//visibility:public"], **kwargs):
     # redirect to _maven_jvm_artifact, so we can externally use the name "artifact" but internally use artifact_spec
-    _maven_jvm_artifact(artifact_spec = artifact, name = name, deps = deps, exports = exports, visibility = visibility, **kwargs)
+    _maven_jvm_artifact(artifact_spec = artifact, name = name, deps = deps, visibility = visibility, **kwargs)
 
 # Description:
 #   Generates the bazel repo and download logic for each artifact (and repository URL prefixes) in the WORKSPACE

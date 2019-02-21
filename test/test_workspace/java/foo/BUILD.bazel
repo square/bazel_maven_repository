@@ -1,10 +1,17 @@
+load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kt_jvm_library")
+
 package(default_visibility = ["//:__subpackages__"])
 
-java_library(
+kt_jvm_library(
     name = "foo",
-    srcs = ["Foo.java"],
+    srcs = [
+        "Bar.kt",
+        "Foo.java",
+    ],
     deps = [
+        "@maven//com/google/auto/value",
         "@maven//com/google/dagger",
         "@maven//com/google/guava",
+        "@maven//javax/inject:javax_inject",
     ],
 )
