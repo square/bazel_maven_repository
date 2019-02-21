@@ -262,14 +262,27 @@ Classifiers have only limited support. An artifact can specify a classifier, but
 the unclassified artifact can be used, but not both.
 
 Classifiers are tacked on the end, e.g. `"foo.bar:blah:1.0:jar:some-classifier"`
- 
-## Limitations
+
+## Cacheing
+
+Bazel can cache artifacts if you provide sha256 hashes.  These will make the artifacts candidates
+for the "content addressable" cache, which is machine-wide, and survives even `bazel clean --expunge`.
+The caveat for this is that if you put the wrong hash, and if that hash is to a file you already have
+downloaded, bazel's internal download mechanism will serve that file instead of the remote file. This
+can cause you to accidentally supply a wrong version, wrong artifact, or wrong kind of file if you're
+not careful.  So take caution when recording the sha256 hashes, both for security and performance
+reasons.  The hash will be preferred over the artifact as a way to identify the artifact, under the
+hood.
+
+# Limitations
 
   * Doesn't support -SNAPSHOT dependencies (#5)
   * Doesn't support multiple versions of a dependency (by design).
   * Doesn't support multiple calls to `maven_repository_specification()` due to collisions in
     the implicit fetching rules it creates. This limitation will be lifted in a version. (#6)
   * Doesn't support -source.jar downloading and attachment. (#44)
+  * .pom files are not cached across `bazel clean --expunge` despite being immutable.  Jar files
+    can be if sha256 hashes are supplied.
 
 ## Other Usage Notes
 
