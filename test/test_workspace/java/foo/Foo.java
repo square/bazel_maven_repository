@@ -24,6 +24,8 @@ public class Foo {
     Bar bar();
 
     static FooComponent create() {
+      new Blah().blah();
+      // io.reactivex.Flowable.just("blah"); This would fail in kotlinc because of bazelbuild/rules_kotlin#132
       return DaggerFoo_FooComponent.builder().build();
     }
   }
