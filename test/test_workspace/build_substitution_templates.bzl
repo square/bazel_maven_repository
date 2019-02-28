@@ -21,6 +21,9 @@ java_library(
 
 maven_jvm_artifact(
    name = "dagger_api",
+   exports = [
+       "@maven//javax/inject:javax_inject",
+   ],
    artifact = "com.google.dagger:dagger:{version}",
 )
 
