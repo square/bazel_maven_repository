@@ -38,17 +38,16 @@ def _raw_jvm_import(ctx):
     Supplied jar parameter (%s) transitively included more than one binary jar and one (optional)
     source jar.  Found: %s, %s""" % (ctx.file.jar, jars, source_jars))
 
-    return [
-        DefaultInfo(files = depset(jars)),
-        JavaInfo(
-            output_jar = jars[0],
-            compile_jar = jars[0],
-            source_jar = source_jars[0] if bool(source_jars) else None,
-            deps = [dep[JavaInfo] for dep in ctx.attr.deps if JavaInfo in dep],
-            runtime_deps = [dep[JavaInfo] for dep in ctx.attr.runtime_deps if JavaInfo in dep],
-            neverlink = getattr(ctx.attr, "neverlink", False),
-        ),
-    ]
+    default_info = DefaultInfo(files = depset(jars))
+    java_info = JavaInfo(
+        output_jar = jars[0],
+        compile_jar = jars[0],
+        source_jar = source_jars[0] if bool(source_jars) else None,
+        deps = [dep[JavaInfo] for dep in ctx.attr.deps if JavaInfo in dep],
+        runtime_deps = [dep[JavaInfo] for dep in ctx.attr.runtime_deps if JavaInfo in dep],
+        neverlink = getattr(ctx.attr, "neverlink", False),
+    )
+    return [default_info, java_info]
 
 raw_jvm_import = rule(
     attrs = {
