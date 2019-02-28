@@ -26,7 +26,8 @@ artifact_config_properties = struct(
     POM_SHA256 = "pom_sha256",
     INSECURE = "insecure",
     BUILD_SNIPPET = "build_snippet",
-    values = ["sha256", "pom_sha256", "insecure", "build_snippet"],
+    TEST_ONLY = "testonly",
+    values = ["sha256", "pom_sha256", "insecure", "build_snippet", "testonly"],
 )
 
 _DOWNLOAD_PREFIX = "maven"
@@ -100,7 +101,7 @@ load("@{maven_rules_repository}//maven:maven.bzl", "maven_jvm_artifact")
 """
 
 _MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
-    name = "{target}",
+    name = "{target}",{test_only}
     artifact = "{artifact_coordinates}",
 {deps})
 """
@@ -227,6 +228,7 @@ def _generate_maven_repository_impl(ctx):
     # Generate the per-group_id BUILD.bazel files.
     build_snippets = ctx.attr.build_snippets
     target_substitutes = dicts.decode_nested(ctx.attr.dependency_target_substitutes)
+    test_only_artifacts = sets.copy_of(ctx.attr.test_only_artifacts)
     processed_artifacts = sets.new()
     for specs in ctx.attr.grouped_artifacts.values():
         artifact_structs = [artifacts.parse_spec(s) for s in specs]
@@ -269,11 +271,15 @@ def _generate_maven_repository_impl(ctx):
                         spec,
                         list(unregistered_deps),
                     ))
+                test_only_subst = (
+                    "\n    testonly = True," if sets.contains(test_only_artifacts, spec) else "")
+
                 target_definitions.append(
                     _MAVEN_REPO_TARGET_TEMPLATE.format(
                         target = artifact.third_party_target_name,
                         deps = _deps_string(normalized_deps),
                         artifact_coordinates = artifact.original_spec,
+                        test_only = test_only_subst,
                     ),
                 )
         file = "%s/BUILD.bazel" % group_path
@@ -293,14 +299,15 @@ _generate_maven_repository = repository_rule(
         "cache_poms_insecurely": attr.bool(mandatory = True),
         "insecure_cache": attr.string(mandatory = False),
         "pom_sha256_hashes": attr.string_dict(mandatory = True),
+        "test_only_artifacts": attr.string_list(mandatory = True),
     },
 )
+
 
 # Implementation of the maven_jvm_artifact rule.
 def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], **kwargs):
     artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
     maven_target = "@%s//%s:%s" % (artifact.maven_target_name, _DOWNLOAD_PREFIX, artifact.path)
-    import_target = artifact.maven_target_name + "_import"
     target_name = name if name else artifact.third_party_target_name
     if artifact.packaging == "jar":
         raw_jvm_import(name = target_name, deps = deps, visibility = visibility, jar = maven_target, **kwargs)
@@ -415,6 +422,7 @@ def _maven_repository_specification(
     grouped_artifacts = {}
     build_snippets = {}
     pom_sha256_hashes = {}
+    test_only_artifacts = []
     for artifact_spec, properties in artifact_declarations.items():
         artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
 
@@ -438,6 +446,9 @@ def _maven_repository_specification(
         if bool(pom_sha256_hash):
             pom_sha256_hashes[artifact_spec] = pom_sha256_hash
 
+        if bool(properties.get(artifact_config_properties.TEST_ONLY)):
+            test_only_artifacts += [artifact_spec]
+
     # Skylark rules can't take in arbitrarily deep dicts, so we rewrite dict(string->dict(string, string)) to an
     # encoded (but trivially splittable) dict(string->list(string)).  Yes it's gross.
     dependency_target_substitutes_rewritten = dicts.encode_nested(dependency_target_substitutes)
@@ -451,6 +462,7 @@ def _maven_repository_specification(
         cache_poms_insecurely = cache_poms_insecurely,
         insecure_cache = insecure_cache,
         pom_sha256_hashes = pom_sha256_hashes,
+        test_only_artifacts = test_only_artifacts,
     )
 
 for_testing = struct(
