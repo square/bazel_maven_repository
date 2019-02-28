@@ -44,6 +44,7 @@ def _raw_jvm_import(ctx):
         compile_jar = jars[0],
         source_jar = source_jars[0] if bool(source_jars) else None,
         deps = [dep[JavaInfo] for dep in ctx.attr.deps if JavaInfo in dep],
+        exports = [dep[JavaInfo] for dep in ctx.attr.exports if JavaInfo in dep],
         runtime_deps = [dep[JavaInfo] for dep in ctx.attr.runtime_deps if JavaInfo in dep],
         neverlink = getattr(ctx.attr, "neverlink", False),
     )
@@ -58,12 +59,14 @@ raw_jvm_import = rule(
         ),
         "deps": attr.label_list(
             default = [],
-            mandatory = False,
+            providers = [JavaInfo],
+        ),
+        "exports": attr.label_list(
+            default = [],
             providers = [JavaInfo],
         ),
         "runtime_deps": attr.label_list(
             default = [],
-            mandatory = False,
             providers = [JavaInfo],
         ),
         "neverlink": attr.bool(default = False),

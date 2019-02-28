@@ -13,7 +13,6 @@ kt_jvm_library(
         "@maven//com/google/auto/value",
         "@maven//com/google/dagger",
         "@maven//com/google/guava",
-        "@maven//javax/inject:javax_inject",
     ],
 )
 
