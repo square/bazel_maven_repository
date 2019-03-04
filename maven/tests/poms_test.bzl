@@ -106,6 +106,27 @@ def substitute_variable_test(env):
     # Not in properties
     asserts.equals(env, "${bar}", for_testing.substitute_variable("${bar}", properties))
 
+
+# Tests issue highlighted in #62 where whitespace and other oddities makes boolean flags parse incorrectly.
+def boolean_options_whitespace_test(env):
+    OPTIONAL_BOOL_POM = """
+        <project><dependencies>
+            <dependency>
+                <groupId>foo</groupId><artifactId>foo</artifactId><version>1.0</version>
+                <optional>false
+                </optional> <!-- Add some whitespace per #62 -->
+            </dependency>
+            <dependency>
+                <groupId>bar</groupId><artifactId>bar</artifactId><version>1.0</version>
+                <optional>true
+                </optional> <!-- Add some whitespace per #62 -->
+            </dependency>
+        </dependencies></project>
+    """
+    dependencies = poms.extract_dependencies(poms.parse(OPTIONAL_BOOL_POM))
+    asserts.false(env, dependencies[0].optional, "optional should be false for foo")
+    asserts.true(env, dependencies[1].optional, "optional should be true for bar")
+
 TESTS = [
     simple_pom_fragment_process,
     simple_pom_fragment_process_scope,
@@ -116,6 +137,7 @@ TESTS = [
     extract_properties_complex_pom_test,
     get_variable_test,
     substitute_variable_test,
+    boolean_options_whitespace_test,
 ]
 
 # Roll-up function.

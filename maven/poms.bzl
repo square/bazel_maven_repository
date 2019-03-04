@@ -51,7 +51,7 @@ def _process_dependency(dep_node):
         elif c.label == labels.SCOPE:
             scope = c.content
         elif c.label == labels.OPTIONAL:
-            optional = bool(c.content)
+            optional = strings.trim(c.content).lower() == "true"
         elif c.label == labels.SYSTEM_PATH:
             system_path = c.content
 
@@ -368,7 +368,7 @@ poms = struct(
     # Returns an xml element tree of the supplied pom text.
     parse = _parse,
 
-    # Returns a list of structs containing the properties each dependency declared pom xml tree.
+    # Returns a list of structs containing each dependency declared pom xml tree.
     extract_dependencies = _get_processed_dependencies,
 
     # Returns a list of structs each dependency declared in the dependencyManagement of the pom xml tree.
