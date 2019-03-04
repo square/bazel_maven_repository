@@ -15,6 +15,7 @@ Release: `1.0-rc6`
 - [Bazel Rules for Maven Respositories](#bazel-rules-for-maven-respositories)
   - [Overview](#overview)
   - [Supported Types](#supported-types)
+  - [Repository URLs](#repository-urls)
   - [Inter-artifact dependencies](#inter-artifact-dependencies)
   - [Coordinate Translation](#coordinate-translation)
     - [Mangling](#mangling)
@@ -23,6 +24,9 @@ Release: `1.0-rc6`
     - [Substitution of build targets](#substitution-of-build-targets)
     - [Packaging](#packaging)
     - [Classifiers](#classifiers)
+  - [API](#api-reference)
+    - [maven_repository_specification](#maven_repository_specification)
+    - [maven_jvm_artifact](#maven_jvm_artifact)
   - [Limitations](#limitations)
   - [Other Usage Notes](#other-usage-notes)
     - [Caches](#caches)
@@ -55,7 +59,7 @@ maven_repository_specification(
     name = "maven",
     artifacts = {
         "com.google.guava:guava:25.0-jre": { "sha256": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9" },
-    }
+    },
 )
 ```
  
@@ -67,6 +71,28 @@ a repository.
 
 > Note: bazel_maven_repository has no workspace dependencies, so adding it to your project will not
 > result in any additional bazel repositories to be fetched.
+
+## Repository URLs
+
+By default, `maven_repository_specification` pulls artifacts from `https://repo1.maven.org/maven2`.  However,
+for artifacts hosted on different (public or private) maven repositories, using the `repository_urls` allows
+the downloader to target any number of `Maven 2`-style repositories.  e.g.:
+
+```
+maven_repository_specification(
+    name = "maven",
+    artifacts = {
+        "android.arch.lifecycle:common:1.1.1": { "sha256": "abcdef" },
+        "android.arch.lifecycle:livedata-core:1.1.1:aar": { "sha256": "fedcba" },
+    },
+    repository_urls = [
+        "https://repo1.maven.org/maven2",
+        "https://dl.google.com/dl/android/maven2/",
+    ]
+)
+```
+
+> Note: Failing to specify the proper set of repositories is a common cause of seeing `404` errors
 
 ## Supported Types
 
@@ -80,6 +106,8 @@ onto the artifact spec string).
 For any other types, please file a feature request, or supply a pull request.  So long as there
 exists a proper bazel import or library rule to bring the artifact's file into bazel's dependency
 graph, it should be possible to support it.
+
+> Note: Failing to specify whether an artifact is an `aar` is a common cause of seeing `404` errors
 
 ## Inter-artifact dependencies
 
@@ -274,7 +302,70 @@ not careful.  So take caution when recording the sha256 hashes, both for securit
 reasons.  The hash will be preferred over the artifact as a way to identify the artifact, under the
 hood.
 
-# Limitations
+## API Reference
+
+### maven_repository_specification
+
+This rule assembles a bazel workspace that represents the artifacts supplied in a bazely form, with
+groupIds split on `.` and representing package paths, and artifactIds used as target names (replacing
+`.` and `-` with `_` by default).
+
+The rule supports per-artifact configuration as well as some limited group-level configuration.
+
+
+
+```
+maven_repository_specification(
+        # The name of the repository
+        name,
+
+        # The dictionary of artifact -> properties which allows us to specify artifacts with more details.  These
+        # properties don't include the group, artifact name, version, classifier, or type, which are all specified
+        # by the artifact key itself.
+        #
+        # The currently supported properties are:
+        #    sha256 -> the hash of the artifact file to be downloaded. (Incompatible with "insecure")
+        #    insecure -> if True, don't fail on a missing sha256 hash. (Incompatible with "sha256")
+        #    build_snippet -> replaces the generated target snippet with the supplied text
+        artifacts = {},
+
+        # The dictionary of per-group target substitutions.  These must be in the format:
+        # "@myreponame//path/to/package:target": "@myrepotarget//path/to/package:alternate"
+        # These are not public aliases, but only apply to intra-package references. These can be 
+        # used to address build cycles introduced by one or more build_snippets that wrap targets.
+        # See the dagger example in the test/test_workspace sample repository.  
+        dependency_target_substitutes = {},
+
+        # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
+        repository_urls = ["https://repo1.maven.org/maven2"]):
+```
+
+### maven_jvm_artifact
+
+This rule is mostly used by the generated code, but can be used in build_snippets. It undrestands
+the structure of the individual fetch workspaces built for each artifact, and so provides the link
+between the man maven workspace and the workhorse workspaces responsibility for fetching each .jar, etc.
+
+```
+maven_jvm_artifact(
+  artifact, # The maven-style artifact coordinates (groupId:artifactId:version[[:type]:classifier])
+  name = None, # The bazel target name (implicitly artifactId with "." and "-" converted to "_")
+  deps = [], # Any dependencies needed at compile-time for consumers of this target.
+  runtime_deps = [], # Any dependencies needed only at runtime (built into _test and _binary deploy jars
+  exports = [], # Any targets listed here are treated by the consuming rule as if it had declared them.
+  visibility = ["//visibility:public"],
+  **kwargs) # Extra parameters passed through to the underlying import rules
+```
+
+> Note: `deps`, `runtime_deps`, and `exports` behave exactly as a java_library would treat them.  Technically
+> `runtime_deps` and `exports` are part of the `**kwargs` and are just passed through naively to the underlying
+> import rules.
+
+> Note: The rules_kotlin (as of March, 2019) contain a bug which fails to propagate compile deps.
+> For some cases, adding a build_snippet that exports otherwise unused dependencies as exports can
+> mitigate this for a few common cases (e.g. rxjava2->reactive-streams).
+
+## Limitations
 
   * Doesn't support -SNAPSHOT dependencies (#5)
   * Doesn't support multiple versions of a dependency (by design).
