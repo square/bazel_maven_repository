@@ -198,13 +198,14 @@ A simple use-case would be to substitute a target name (e.g. "mockito-core" -> "
 cleaner/easier use in bazel:
 
 ```python
+MOCKITO_SNIPPET = """
+alias(name = "mockito", actual=":mockito_core")
+maven_jvm_artifact(name = "mockito_core", artifact = "org.mockito:mockito-core:{v}")
+"""
 maven_repository_specification(
     name = "maven",
     artifacts = {
-        "org.mockito:mockito-core:2.20.1": {
-            "sha256": "blahblahblah",
-            "build_snippet": """maven_jvm_artifact(name = "mockito", artifact = "org.mockito:mockito-core:2.20.1")""",
-        },
+        "org.mockito:mockito-core:2.20.1": { "sha256": "blahblahblah", "build_snippet": MOCKITO_SNIPPET.format(v="2.20.1") },
         # ... all the other deps.
     },
 )
@@ -319,9 +320,9 @@ maven_repository_specification(
         # The name of the repository
         name,
 
-        # The dictionary of artifact -> properties which allows us to specify artifacts with more details.  These
-        # properties don't include the group, artifact name, version, classifier, or type, which are all specified
-        # by the artifact key itself.
+        # The dictionary of artifact -> properties which allows us to specify artifacts with more details.
+        # These properties don't include the group, artifact name, version, classifier, or type, which are
+        # all specified by the artifact key itself.
         #
         # The currently supported properties are:
         #    sha256 -> the hash of the artifact file to be downloaded. (Incompatible with "insecure")
@@ -336,7 +337,8 @@ maven_repository_specification(
         # See the dagger example in the test/test_workspace sample repository.  
         dependency_target_substitutes = {},
 
-        # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
+        # Optional list of repositories which the build rule will attempt to fetch maven artifacts and
+        # metadata.
         repository_urls = ["https://repo1.maven.org/maven2"]):
 ```
 
