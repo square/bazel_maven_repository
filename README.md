@@ -292,7 +292,7 @@ the unclassified artifact can be used, but not both.
 
 Classifiers are tacked on the end, e.g. `"foo.bar:blah:1.0:jar:some-classifier"`
 
-## Cacheing
+## Caching
 
 Bazel can cache artifacts if you provide sha256 hashes.  These will make the artifacts candidates
 for the "content addressable" cache, which is machine-wide, and survives even `bazel clean --expunge`.
@@ -344,9 +344,9 @@ maven_repository_specification(
 
 ### maven_jvm_artifact
 
-This rule is mostly used by the generated code, but can be used in build_snippets. It undrestands
+This rule is mostly used by the generated code, but can be used in build_snippets. It understands
 the structure of the individual fetch workspaces built for each artifact, and so provides the link
-between the man maven workspace and the workhorse workspaces responsibility for fetching each .jar, etc.
+between the main maven workspace and the workhorse workspaces responsibile for fetching each .jar, etc.
 
 ```
 maven_jvm_artifact(
