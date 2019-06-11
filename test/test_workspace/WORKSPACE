@@ -16,7 +16,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 KOTLIN_VERSION = "1.2.70"
 
-rules_kotlin_version = "porque_no_les_dos"
+rules_kotlin_version = "legacy-modded-0_25_2-01"
 
 http_archive(
     name = "io_bazel_rules_kotlin",
