@@ -2,6 +2,18 @@ dist: trusty
 
 language: generic
 
+os:
+  - linux
+  - osx
+
+env:
+  global:
+    - BAZEL_DOWNLOAD_PREFIX=https://github.com/bazelbuild/bazel/releases/download
+    - BAZEL_VERSION="0.26.1"
+  matrix:
+    - SEGMENT="."
+    - SEGMENT="test/test_workspace"
+
 addons:
   apt:
     sources:
@@ -9,15 +21,21 @@ addons:
     packages:
       - wget
       - pkg-config
+  homebrew:
+    packages:
+      - wget
+    update: true
 
 before_install:
-  - wget https://github.com/bazelbuild/bazel/releases/download/0.26.1/bazel_0.26.1-linux-x86_64.deb
-  - sha256sum -c tools/bazel_0.26.1-linux-x86_64.deb.sha256
-  - sudo dpkg -i bazel_0.26.1-linux-x86_64.deb
+  - source tools/.travis.${TRAVIS_OS_NAME}
+  - wget ${BAZEL_DOWNLOAD_PREFIX}/${BAZEL_VERSION}/${BAZEL_INSTALLER}
+  - ${SHA_CMD} -c tools/${BAZEL_INSTALLER}.sha256
+
+install:
+  - ${INSTALL} ${BAZEL_INSTALLER}
+  - bazel version
 
 script:
-  - # Test the maven integration's internal unit tests
-  - bazel test //...
-  - # Exercise the sample project.
-  - cd test/test_workspace
+  - # Test each root in the build matrix.
+  - cd ${HOME}/build/${TRAVIS_REPO_SLUG}/${SEGMENT}
   - bazel test //...

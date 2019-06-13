@@ -1,0 +1,3 @@
+export BAZEL_INSTALLER=bazel-${BAZEL_VERSION}-installer-darwin-x86_64.sh
+export SHA_CMD="shasum -a 256"
+export INSTALL="sudo sh"
