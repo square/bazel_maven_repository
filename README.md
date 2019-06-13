@@ -34,6 +34,7 @@ Release: `1.0`
     - [Kotlin](#kotlin)
       - [ijar (abi-jar) and inline functions](#ijar-abi-jar-and-inline-functions)
       - [rules_kotlin and maven integration paths](#rules_kotlin-and-maven-integration-paths)
+  - [Support Matrix](#support-matrix)
   - [License](#license)
 
 
@@ -413,6 +414,18 @@ worker).  Specifically, it misinterprets paths in the sandbox.  Therefore, if us
 it is crucial to include `--strategy=KotlinCompile=worker` either on the command-line, or in the
 project's .bazelrc or your personal .bazelrc.  Otherwise, the annotation processor will fail to
 find the jar contents for annotation processors such as `Dagger 2` or `AutoValue` or `AutoFactory`.
+
+## Support Matrix
+
+Which version of *bazel_maven_repository* should you use with which version of Bazel (best
+effort testing)
+
+| Bazel Maven Repo Version | 1.0 |
+| ---- | --- |
+| Bazel 0.25.2 | ![Yes](https://img.shields.io/static/v1.svg?label=&message=yes&color=green) |
+| Bazel 0.26.0 | ![Yes](https://img.shields.io/static/v1.svg?label=&message=yes&color=green) |
+| Bazel 0.26.1 | ![Yes](https://img.shields.io/static/v1.svg?label=&message=yes&color=green) |
+
 
 ## License
 
