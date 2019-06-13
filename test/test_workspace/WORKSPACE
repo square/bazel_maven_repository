@@ -14,20 +14,28 @@ load(
 )
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-KOTLIN_VERSION = "1.2.70"
-
-rules_kotlin_version = "legacy-modded-0_25_2-01"
+KOTLIN_VERSION = "1.3.31"
+KOTLINC_ROOT = "https://github.com/JetBrains/kotlin/releases/download"
+KOTLINC_SHA = "107325d56315af4f59ff28db6837d03c2660088e3efeb7d4e41f3e01bb848d6a"
+KOTLIN_RULES_VERSION = "legacy-modded-0_26_1-01"
+KOTLIN_RULES_SHA = "b943379a6b48156cb542cee4502a463a6e2edeb307d1a4cabd0309ca2bf3f10f"
 
 http_archive(
     name = "io_bazel_rules_kotlin",
-    strip_prefix = "rules_kotlin-%s" % rules_kotlin_version,
+    strip_prefix = "rules_kotlin-%s" % KOTLIN_RULES_VERSION,
     type = "zip",
-    urls = ["https://github.com/cgruber/rules_kotlin/archive/%s.zip" % rules_kotlin_version],
+    urls = ["https://github.com/cgruber/rules_kotlin/archive/%s.zip" % KOTLIN_RULES_VERSION],
+    sha256 = KOTLIN_RULES_SHA,
 )
 
 load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kotlin_repositories", "kt_register_toolchains")
 
-kotlin_repositories()
+kotlin_repositories(compiler_release = {
+  "urls": [
+      "{root}/v{v}/kotlin-compiler-{v}.zip".format(root = KOTLINC_ROOT, v = KOTLIN_VERSION),
+  ],
+  "sha256": KOTLINC_SHA,
+})
 
 kt_register_toolchains()
 
