@@ -111,10 +111,7 @@ def _fetch_pom(ctx, artifact):
     pom_urls = ["%s/%s" % (repo, artifact.pom) for repo in ctx.attr.repository_urls]
     pom_file = "%s/%s-%s.pom" % (artifact.group_path, artifact.artifact_id, artifact.version)
     ctx.download(url = pom_urls, output = pom_file)
-    result = ctx.execute(["cat", pom_file])
-    if result.return_code:
-        fail("Error reading pom file %s (return code %s)" % (pom_file, result.return_code))
-    return result.stdout
+    return ctx.read(pom_file)
 
 # In theory, this logic should live in poms.bzl, but bazel makes it harder to use the strategy pattern (to pass in a
 # downloader) and we want to keep file and network code out of the poms processing code.
