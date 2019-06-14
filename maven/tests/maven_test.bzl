@@ -27,12 +27,8 @@ def handle_legacy_build_snippet_handling(env):
             {"foo:bar:1.0": {"sha256": "abcdef"}}, [], {"foo:bar": "blah"}))
 
 # Set up fakes.
-def _fake_cat_for_get_pom_test(args):
-    return struct(
-        return_code = 0,
-        stdout = COMPLEX_POM,
-        stderr = None,
-    )
+def _fake_read_for_get_pom_test(path):
+    return COMPLEX_POM
 
 def _fake_download(url, output):
     pass
@@ -43,7 +39,7 @@ def _fake_download(url, output):
 def get_pom_test(env):
     fake_ctx = struct(
         download = _fake_download,
-        execute = _fake_cat_for_get_pom_test,
+        read = _fake_read_for_get_pom_test,
         attr = struct(repository_urls = [_FAKE_URL_PREFIX])
     )
     project = poms.parse(
@@ -52,16 +48,12 @@ def get_pom_test(env):
 
 
 # Set up fakes.
-def _fake_cat_for_get_parent_chain(args):
+def _fake_read_for_get_parent_chain(path):
     download_map = {
         "test/group/parent-1.0.pom": PARENT_POM,
         "test/grandparent-1.0.pom": GRANDPARENT_POM,
     }
-    return struct(
-        return_code = 0 if bool(download_map.get(args[1], None)) else 1,
-        stdout = download_map.get(args[1], ""),
-        stderr = None,
-    )
+    return download_map.get(path, "")
 
 def _extract_artifact_id(node):
     for child_node in node.children:
@@ -71,7 +63,7 @@ def _extract_artifact_id(node):
 def get_parent_chain_test(env):
     fake_ctx = struct(
         download = _fake_download,
-        execute = _fake_cat_for_get_parent_chain,
+        read = _fake_read_for_get_parent_chain,
         attr = struct(repository_urls = [_FAKE_URL_PREFIX])
     )
     chain = for_testing.get_inheritance_chain(fake_ctx, COMPLEX_POM)
