@@ -41,11 +41,25 @@ kt_register_toolchains()
 
 maven_repository_specification(
     name = "maven",
+
+    # If supplied, then any pom files for which a pom_sha256 attribute is not supplied will be
+    # insecurely cached (after first download) using hashes stored in this folder.
+    #
+    # This can be an absolute or a path relative to ${HOME}
+    insecure_pom_cache=".cache/bazel_pom_cache",
+
+    # The artifact spec list.
     artifacts = {
         # This is the proper way to specify an artifact.  It contains the artifact, plus a configuration dictionary.
         # The config dictionary contains a sha256 hash. This both ensures the file downloaded is the expected one, but
-        # also caches the file in bazel's "content addressable" cache, which survives build clean. 
-        "com.google.guava:guava:25.0-jre": {"sha256": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9"},
+        # also caches the file in bazel's "content addressable" cache, which survives build clean.
+        "com.google.guava:guava:25.0-jre": {
+            "sha256": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9",
+
+            # This is optional, but more secure. Failing this, the pom's sha will be locally
+            # stored in the insecure_pom_cache
+            "pom_sha256": "68c1ac2817572d6a6eb5c36072c37379f912ec75e99f6bc25aaa7ed2eb2b5ff1",
+        },
         "com.google.dagger:dagger:2.20": {
             "sha256": "d37a556d8d57e2428c20e222b95346512d11fcf2174d581489a69a1439b886fb",
             "build_snippet": DAGGER_BUILD_SNIPPET_WITH_PLUGIN.format(version = "2.20"),
@@ -85,6 +99,7 @@ maven_repository_specification(
         "org.reflections:reflections:0.9.11": { "insecure": True }, # test leniency related to #62.
         "org.javassist:javassist:3.21.0-GA": { "insecure": True}, # Only needed if #62 is fixed.
     },
+
     # Because these apply to all targets within a group, it's specified separately from the artifact list.
     dependency_target_substitutes = {
         # Because we rewrite dagger -> dagger_api (and make a wrapper target "dagger" that exports the dagger

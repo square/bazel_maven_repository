@@ -33,6 +33,9 @@ def _fake_read_for_get_pom_test(path):
 def _fake_download(url, output):
     pass
 
+def _fake_log(string):
+    pass
+
 # This test is way way too mock-ish, but I definitely wanted to stage a test around the method itself, since I'm
 # restructuring large chunks of the code.  All it does is make sure the download and execute commands are done
 # as expected, to return pom text.
@@ -40,7 +43,8 @@ def get_pom_test(env):
     fake_ctx = struct(
         download = _fake_download,
         read = _fake_read_for_get_pom_test,
-        attr = struct(repository_urls = [_FAKE_URL_PREFIX])
+        attr = struct(repository_urls = [_FAKE_URL_PREFIX], insecure_pom_cache = None),
+        report_progress = _fake_log,
     )
     project = poms.parse(
         for_testing.fetch_pom(fake_ctx, artifacts.annotate(artifacts.parse_spec("test.group:child:1.0"))))
@@ -64,7 +68,8 @@ def get_parent_chain_test(env):
     fake_ctx = struct(
         download = _fake_download,
         read = _fake_read_for_get_parent_chain,
-        attr = struct(repository_urls = [_FAKE_URL_PREFIX])
+        attr = struct(repository_urls = [_FAKE_URL_PREFIX], insecure_pom_cache = None),
+        report_progress = _fake_log,
     )
     chain = for_testing.get_inheritance_chain(fake_ctx, COMPLEX_POM)
     asserts.equals(env, ["child", "parent", "grandparent"], [_extract_artifact_id(x) for x in chain])

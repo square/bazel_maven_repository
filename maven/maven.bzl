@@ -23,9 +23,10 @@ load(":utils.bzl", "dicts", "paths", "strings")
 #enum
 artifact_config_properties = struct(
     SHA256 = "sha256",
+    POM_SHA256 = "pom_sha256",
     INSECURE = "insecure",
     BUILD_SNIPPET = "build_snippet",
-    values = ["sha256", "insecure", "build_snippet"],
+    values = ["sha256", "pom_sha256", "insecure", "build_snippet"],
 )
 
 _DOWNLOAD_PREFIX = "maven"
@@ -49,6 +50,16 @@ filegroup(
     name = "{prefix}",
     srcs = ["{path}"],
 )
+"""
+
+_POM_HASH_CACHE_WRITE_SCRIPT = "bin/pom_hash_cache_write.sh"
+
+#TODO(cgruber) move this into a toolchain (and make a windows equivalent)
+_POM_HASH_CACHE_WRITE_SCRIPT_CONTENT = """#!/bin/sh
+content="$1"
+cache_file="$2"
+mkdir -p $(dirname "${cache_file}")
+echo "${content}" > ${cache_file}
 """
 
 def _fetch_artifact_impl(ctx):
@@ -105,13 +116,57 @@ def _normalize_target(full_target_spec, current_package, target_substitutions):
         return ":%s" % target  # Trim to a local reference.
     return full_package if paths.filename(full_package) == target else full_target_spec
 
-# This should be in poms, but we want to keep ctx/network/file operations separate, and Starlark is constrained
-# enough that creating a "downloader" struct is more trouble than it's worth.
+# Try to obtain the sha256 of the pom file, so it can be resolved from the CA cache (if
+# present).
+#
+# Note, this is strictly insecure, insofar as we are trusting the first download and caching the
+# sha of the file first downloaded.  However, this is not the artifact, and even if hostile pom
+# metadata were introduced, it could only point at dependencies listed in the master list, or else
+# errors will be surfaced, so there is a signal that something has intercepted.  More rigorous
+# usage is possible by setting the pom_sha256 property in the configuration of the artifact.
+def _get_pom_sha256(ctx, artifact, urls, file):
+    ctx.report_progress("Obtaining hash for %s" % file)
+    explicit_sha256 = ctx.attr.pom_sha256_hashes.get(artifact.original_spec)
+    if explicit_sha256:
+        return explicit_sha256
+    if ctx.attr.insecure_pom_cache.startswith("/"):
+        cache_dir = ctx.attr.insecure_pom_cache
+    else:
+        cache_dir = "%s/%s" % (ctx.os.environ["HOME"], ctx.attr.insecure_pom_cache)
+    cached_file = "%s/%s.sha256" % (cache_dir, file)
+    sha_cache_result = ctx.execute(["cat", cached_file])
+    if sha_cache_result.return_code != 0:
+        # This will result in a CA cache miss and an extra download on first use, since the first
+        # (non-sha-attributed) download won't store anything in the CA cache.
+        ctx.report_progress("%s not locally cached, fetching and hashing" % cached_file)
+        pom_result = ctx.download(url = urls, output = file)
+        result = ctx.execute([_POM_HASH_CACHE_WRITE_SCRIPT, pom_result.sha256, cached_file])
+        if result.return_code != 0:
+            fail("Cache write failed with code %s, stderr: %s", (result.return_code, result.stderr))
+    else:
+        return strings.trim(sha_cache_result.stdout)
+
+# Fetch the pom for the artifact.  First see if a cached hash is available for it. If so, use
+# that hash to try a download with the sha, to get a hit on the content addressable cache. If not
+# fetch normally and write that hash to the pom hash cache for next time.
+#
+# This should be in poms.bzl, but we want to keep ctx/network/file operations separate,
+# and Starlark is constrained enough that creating a "downloader" struct is more trouble than
+# it's worth.
 def _fetch_pom(ctx, artifact):
-    pom_urls = ["%s/%s" % (repo, artifact.pom) for repo in ctx.attr.repository_urls]
-    pom_file = "%s/%s-%s.pom" % (artifact.group_path, artifact.artifact_id, artifact.version)
-    ctx.download(url = pom_urls, output = pom_file)
-    return ctx.read(pom_file)
+    urls = ["%s/%s" % (repo, artifact.pom) for repo in ctx.attr.repository_urls]
+    file = "{group_id}/{artifact_id}-{version}.pom".format(
+        group_id = artifact.group_path,
+        artifact_id = artifact.artifact_id,
+        version = artifact.version)
+    ctx.report_progress("Fetching %s" % file)
+
+    sha256 = _get_pom_sha256(ctx, artifact, urls, file) if ctx.attr.insecure_pom_cache else None
+    if sha256:
+        ctx.download(url = urls, sha256 = sha256, output = file)
+    else:
+        ctx.download(url = urls, output = file)
+    return ctx.read(file)
 
 # In theory, this logic should live in poms.bzl, but bazel makes it harder to use the strategy pattern (to pass in a
 # downloader) and we want to keep file and network code out of the poms processing code.
@@ -128,8 +183,8 @@ def _get_inheritance_chain(ctx, xml_text):
         current = parent_node
     return inheritance_chain
 
-# Take an inheritance chain of xml trees (Fetched by _get_inheritance_chain) and merge them from the top (the end of
-# the list) to the bottom (the beginning of the list)
+# Take an inheritance chain of xml trees (Fetched by _get_inheritance_chain) and merge them from
+# the top (the end of the list) to the bottom (the beginning of the list)
 def _get_effective_pom(inheritance_chain):
     merged = inheritance_chain.pop()
     for next in reversed(inheritance_chain):
@@ -155,11 +210,16 @@ def _should_include_dependency(dep):
         not dep.optional
     )
 
+
 def _generate_maven_repository_impl(ctx):
     # Generate the root WORKSPACE file
     repository_root_path = ctx.path(".")
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
-
+    ctx.file(
+        _POM_HASH_CACHE_WRITE_SCRIPT,
+        content = _POM_HASH_CACHE_WRITE_SCRIPT_CONTENT,
+        executable = True,
+    )
     # Generate the per-group_id BUILD.bazel files.
     build_snippets = ctx.attr.build_snippets
     target_substitutes = dicts.decode_nested(ctx.attr.dependency_target_substitutes)
@@ -182,7 +242,7 @@ def _generate_maven_repository_impl(ctx):
             artifact = artifacts.annotate(artifacts.parse_spec(spec))
             coordinates = "%s:%s" % (artifact.group_id, artifact.artifact_id)
             sets.add(processed_artifacts, coordinates)
-            snippet = build_snippets.get(coordinates, None)
+            snippet = build_snippets.get(coordinates)
             if snippet:
                 target_definitions.append(snippet)
             else:
@@ -226,6 +286,8 @@ _generate_maven_repository = repository_rule(
         "maven_rules_repository": attr.string(mandatory = False, default = "maven_repository_rules"),
         "dependency_target_substitutes": attr.string_list_dict(mandatory = True),
         "build_snippets": attr.string_dict(mandatory = True),
+        "insecure_pom_cache": attr.string(mandatory = False),
+        "pom_sha256_hashes": attr.string_dict(mandatory = True),
     },
 )
 
@@ -284,10 +346,10 @@ def _validate_artifacts(artifact_definitions):
         artifact = artifacts.parse_spec(spec)  # Basic sanity check.
         if not bool(artifact.version):
             errors += ["""Artifact "%s" missing version""" % spec]
-        if (not properties.get(artifact_config_properties.SHA256, None) and
+        if (not properties.get(artifact_config_properties.SHA256) and
             not _fix_string_booleans(properties.get(artifact_config_properties.INSECURE, False))):
             errors += ["""Artifact "%s" is mising a sha256. Either supply it or mark it "insecure".""" % spec]
-        if (properties.get(artifact_config_properties.SHA256, None) and
+        if (properties.get(artifact_config_properties.SHA256) and
             _fix_string_booleans(properties.get(artifact_config_properties.INSECURE, False))):
             errors += ["""Artifact "%s" cannot be both insecure and have a sha256.  Specify one or the other.""" % spec]
     if bool(errors):
@@ -312,7 +374,7 @@ def _handle_legacy_specifications(artifact_declarations, insecure_artifacts, bui
         artifact = artifacts.parse_spec(key)
         versionless_mapping["%s:%s" % (artifact.group_id, artifact.artifact_id)] = key
     for key, snippet in build_snippets.items():
-        versioned_key = versionless_mapping.get(key, None)
+        versioned_key = versionless_mapping.get(key)
         if not bool(versioned_key):
             fail("Artifact %s listed in build_substitutions not present in main artifact list.", key)
         config = artifact_declarations[versioned_key]
@@ -332,7 +394,8 @@ def _maven_repository_specification(
         insecure_artifacts = [],
         build_substitutes = {},
         dependency_target_substitutes = {},
-        repository_urls = ["https://repo1.maven.org/maven2"]):
+        repository_urls = ["https://repo1.maven.org/maven2"],
+        insecure_pom_cache = None):
     _handle_legacy_specifications(artifact_declarations, insecure_artifacts, build_substitutes)
 
     if len(repository_urls) == 0:
@@ -345,6 +408,7 @@ def _maven_repository_specification(
     _check_for_duplicates(artifact_declarations)
     grouped_artifacts = {}
     build_snippets = {}
+    pom_sha256_hashes = {}
     for artifact_spec, properties in artifact_declarations.items():
         artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
 
@@ -352,7 +416,7 @@ def _maven_repository_specification(
         grouped_artifacts[artifact.group_id] = (
             grouped_artifacts.get(artifact.group_id, default = []) + [artifact.original_spec]
         )
-        sha256 = properties.get(artifact_config_properties.SHA256, None)
+        sha256 = properties.get(artifact_config_properties.SHA256)
         urls = ["%s/%s" % (repo, artifact.path) for repo in repository_urls]
         _fetch_artifact(
             name = artifact.maven_target_name,
@@ -360,9 +424,13 @@ def _maven_repository_specification(
             local_path = artifact.path,
             sha256 = sha256,
         )
-        snippet = properties.get(artifact_config_properties.BUILD_SNIPPET, None)
+        snippet = properties.get(artifact_config_properties.BUILD_SNIPPET)
         if bool(snippet):
             build_snippets["%s:%s" % (artifact.group_id, artifact.artifact_id)] = snippet
+
+        pom_sha256_hash = properties.get(artifact_config_properties.POM_SHA256)
+        if bool(pom_sha256_hash):
+            pom_sha256_hashes[artifact_spec] = pom_sha256_hash
 
     # Skylark rules can't take in arbitrarily deep dicts, so we rewrite dict(string->dict(string, string)) to an
     # encoded (but trivially splittable) dict(string->list(string)).  Yes it's gross.
@@ -374,6 +442,8 @@ def _maven_repository_specification(
         repository_urls = repository_urls,
         dependency_target_substitutes = dependency_target_substitutes_rewritten,
         build_snippets = build_snippets,
+        insecure_pom_cache = insecure_pom_cache,
+        pom_sha256_hashes = pom_sha256_hashes,
     )
 
 for_testing = struct(
@@ -428,7 +498,13 @@ def maven_repository_specification(
         dependency_target_substitutes = {},
 
         # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
-        repository_urls = ["https://repo1.maven.org/maven2"]):
+        repository_urls = ["https://repo1.maven.org/maven2"],
+
+        # Supply a cache directory (relative to $HOME of the current user, or absolute) into which
+        # to cache the pom file hashes, which will enable them to participate in the content-
+        # addressable cache.  By default they are not cached locally unless pom_sha256 is supplied
+        # for that artifact.
+        insecure_pom_cache = None):
     # Redirected to _maven_repository_specification to allow the public parameter "artifacts" without conflicting
     # with the artifact utility struct.
     _maven_repository_specification(
@@ -438,4 +514,5 @@ def maven_repository_specification(
         build_substitutes = build_substitutes,
         dependency_target_substitutes = dependency_target_substitutes,
         repository_urls = repository_urls,
+        insecure_pom_cache = insecure_pom_cache,
     )
