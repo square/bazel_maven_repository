@@ -143,6 +143,7 @@ def _get_pom_sha256(ctx, artifact, urls, file):
         result = ctx.execute([_POM_HASH_CACHE_WRITE_SCRIPT, pom_result.sha256, cached_file])
         if result.return_code != 0:
             fail("Cache write failed with code %s, stderr: %s", (result.return_code, result.stderr))
+        return pom_result.sha256
     else:
         return strings.trim(sha_cache_result.stdout)
 
@@ -158,7 +159,8 @@ def _fetch_pom(ctx, artifact):
     file = "{group_id}/{artifact_id}-{version}.pom".format(
         group_id = artifact.group_path,
         artifact_id = artifact.artifact_id,
-        version = artifact.version)
+        version = artifact.version,
+    )
     ctx.report_progress("Fetching %s" % file)
 
     sha256 = _get_pom_sha256(ctx, artifact, urls, file) if ctx.attr.insecure_pom_cache else None
@@ -210,7 +212,6 @@ def _should_include_dependency(dep):
         not dep.optional
     )
 
-
 def _generate_maven_repository_impl(ctx):
     # Generate the root WORKSPACE file
     repository_root_path = ctx.path(".")
@@ -220,6 +221,7 @@ def _generate_maven_repository_impl(ctx):
         content = _POM_HASH_CACHE_WRITE_SCRIPT_CONTENT,
         executable = True,
     )
+
     # Generate the per-group_id BUILD.bazel files.
     build_snippets = ctx.attr.build_snippets
     target_substitutes = dicts.decode_nested(ctx.attr.dependency_target_substitutes)
@@ -450,6 +452,7 @@ for_testing = struct(
     unsupported_keys = _unsupported_keys,
     handle_legacy_specifications = _handle_legacy_specifications,
     fetch_pom = _fetch_pom,
+    get_pom_sha256 = _get_pom_sha256,
     get_inheritance_chain = _get_inheritance_chain,
     get_effective_pom = _get_effective_pom,
 )

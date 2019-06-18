@@ -1,4 +1,4 @@
-load(":poms_for_testing.bzl", "COMPLEX_POM", "PARENT_POM", "GRANDPARENT_POM")
+load(":poms_for_testing.bzl", "COMPLEX_POM", "GRANDPARENT_POM", "PARENT_POM")
 load(":testing.bzl", "asserts", "test_suite")
 load("//maven:artifacts.bzl", "artifacts")
 load("//maven:maven.bzl", "for_testing")
@@ -13,27 +13,35 @@ def unsupported_keys_test(env):
     asserts.equals(
         env,
         expected = sets.new("foo", "bar"),
-        actual = for_testing.unsupported_keys(["build_snippet","foo", "sha256", "insecure", "bar"]))
+        actual = for_testing.unsupported_keys(["build_snippet", "foo", "sha256", "insecure", "bar"]),
+    )
 
 def handle_legacy_sha_handling(env):
-    asserts.equals(env,
-        expected = {"foo:bar:1.0": { "sha256": "abcdef" }},
-        actual = for_testing.handle_legacy_specifications({"foo:bar:1.0": "abcdef"}, [], {}))
+    asserts.equals(
+        env,
+        expected = {"foo:bar:1.0": {"sha256": "abcdef"}},
+        actual = for_testing.handle_legacy_specifications({"foo:bar:1.0": "abcdef"}, [], {}),
+    )
 
 def handle_legacy_build_snippet_handling(env):
-    asserts.equals(env,
-        expected = {"foo:bar:1.0": { "sha256": "abcdef", "build_snippet": "blah" }},
+    asserts.equals(
+        env,
+        expected = {"foo:bar:1.0": {"sha256": "abcdef", "build_snippet": "blah"}},
         actual = for_testing.handle_legacy_specifications(
-            {"foo:bar:1.0": {"sha256": "abcdef"}}, [], {"foo:bar": "blah"}))
+            {"foo:bar:1.0": {"sha256": "abcdef"}},
+            [],
+            {"foo:bar": "blah"},
+        ),
+    )
 
 # Set up fakes.
 def _fake_read_for_get_pom_test(path):
     return COMPLEX_POM
 
-def _fake_download(url, output):
+def _noop_download(url, output):
     pass
 
-def _fake_log(string):
+def _noop_report_progress(string):
     pass
 
 # This test is way way too mock-ish, but I definitely wanted to stage a test around the method itself, since I'm
@@ -41,15 +49,87 @@ def _fake_log(string):
 # as expected, to return pom text.
 def get_pom_test(env):
     fake_ctx = struct(
-        download = _fake_download,
+        download = _noop_download,
         read = _fake_read_for_get_pom_test,
         attr = struct(repository_urls = [_FAKE_URL_PREFIX], insecure_pom_cache = None),
-        report_progress = _fake_log,
+        report_progress = _noop_report_progress,
     )
     project = poms.parse(
-        for_testing.fetch_pom(fake_ctx, artifacts.annotate(artifacts.parse_spec("test.group:child:1.0"))))
+        for_testing.fetch_pom(fake_ctx, artifacts.annotate(artifacts.parse_spec("test.group:child:1.0"))),
+    )
     asserts.equals(env, "project", project.label)
 
+def _fake_execute_for_cache_hit_test(args):
+    if args[0] == "cat":
+        if args[1] == "/tmp/blah/test/group/child-1.0.pom.sha256":
+            return struct(
+                return_code = 0,
+                stdout = "\n1234567812345678123456781234567812345678123456781234567812345678 \n",
+            )
+
+def get_pom_sha256_cache_hit_test(env):
+    fake_ctx = struct(
+        download = _noop_download,
+        read = _fake_execute_for_cache_hit_test,
+        attr = struct(
+            insecure_pom_cache = "/tmp/blah",
+            pom_sha256_hashes = {},
+        ),
+        report_progress = _noop_report_progress,
+        execute = _fake_execute_for_cache_hit_test,
+    )
+    artifact = artifacts.annotate(artifacts.parse_spec("test.group:child:1.0"))
+    urls = ["fake://somerepo/test/group/child/1.0/child-1.0.pom"]
+    file = "test/group/child-1.0.pom"
+    sha256 = for_testing.get_pom_sha256(fake_ctx, artifact, urls, file)
+    asserts.equals(env, "1234567812345678123456781234567812345678123456781234567812345678", sha256)
+
+def _fake_download_for_cache_miss_test(url, output):
+    return struct(sha256 = "1234567812345678123456781234567812345678123456781234567812345678")
+
+def _fake_execute_for_cache_miss_test(args):
+    print(args)
+    if args[0] == "cat":
+        if args[1] == "/tmp/blah/test/group/child-1.0.pom.sha256":
+            return struct(return_code = 1)
+    elif args[0] == "bin/pom_hash_cache_write.sh":
+        if (args[1] == "1234567812345678123456781234567812345678123456781234567812345678" and
+            args[2] == "/tmp/blah/test/group/child-1.0.pom.sha256"):
+            return struct(return_code = 0)
+    fail("Unexpected Execution %s" % args)
+
+def get_pom_sha256_cache_miss_test(env):
+    fake_ctx = struct(
+        download = _fake_download_for_cache_miss_test,
+        read = _fake_read_for_get_pom_test,
+        attr = struct(
+            insecure_pom_cache = "/tmp/blah",
+            pom_sha256_hashes = {},
+        ),
+        report_progress = _noop_report_progress,
+        execute = _fake_execute_for_cache_miss_test,
+    )
+    artifact = artifacts.annotate(artifacts.parse_spec("test.group:child:1.0"))
+    urls = ["fake://somerepo/test/group/child/1.0/child-1.0.pom"]
+    file = "test/group/child-1.0.pom"
+    sha256 = for_testing.get_pom_sha256(fake_ctx, artifact, urls, file)
+    asserts.equals(env, "1234567812345678123456781234567812345678123456781234567812345678", sha256)
+
+def get_pom_sha256_predefined_test(env):
+    fake_ctx = struct(
+        download = _fake_download_for_cache_miss_test,
+        read = _fake_read_for_get_pom_test,
+        attr = struct(
+            insecure_pom_cache = "/tmp/blah",
+            pom_sha256_hashes = {
+                "test.group:child:1.0": "1234567812345678123456781234567812345678123456781234567812345678",
+            },
+        ),
+        report_progress = _noop_report_progress,
+    )
+    artifact = artifacts.annotate(artifacts.parse_spec("test.group:child:1.0"))
+    sha256 = for_testing.get_pom_sha256(fake_ctx, artifact, None, None)
+    asserts.equals(env, "1234567812345678123456781234567812345678123456781234567812345678", sha256)
 
 # Set up fakes.
 def _fake_read_for_get_parent_chain(path):
@@ -66,10 +146,10 @@ def _extract_artifact_id(node):
 
 def get_parent_chain_test(env):
     fake_ctx = struct(
-        download = _fake_download,
+        download = _noop_download,
         read = _fake_read_for_get_parent_chain,
         attr = struct(repository_urls = [_FAKE_URL_PREFIX], insecure_pom_cache = None),
-        report_progress = _fake_log,
+        report_progress = _noop_report_progress,
     )
     chain = for_testing.get_inheritance_chain(fake_ctx, COMPLEX_POM)
     asserts.equals(env, ["child", "parent", "grandparent"], [_extract_artifact_id(x) for x in chain])
@@ -86,12 +166,17 @@ def get_effective_pom_test(env):
 
 # Roll-up function.
 def suite():
-    return test_suite("maven processing", tests = [
-        unsupported_keys_test,
-        handle_legacy_sha_handling,
-        handle_legacy_build_snippet_handling,
-        get_pom_test,
-        get_parent_chain_test,
-        get_effective_pom_test,
-    ],
-)
+    return test_suite(
+        "maven processing",
+        tests = [
+            unsupported_keys_test,
+            handle_legacy_sha_handling,
+            handle_legacy_build_snippet_handling,
+            get_pom_test,
+            get_pom_sha256_cache_hit_test,
+            get_pom_sha256_cache_miss_test,
+            get_pom_sha256_predefined_test,
+            get_parent_chain_test,
+            get_effective_pom_test,
+        ],
+    )
