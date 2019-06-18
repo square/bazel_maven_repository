@@ -21,6 +21,7 @@ Release: `1.0`
     - [Mangling](#mangling)
   - [Artifact Configuration](#artifact-configuration)
     - [Sha verification](#sha-verification)
+    - [Pom file sha verification](#pom-file-sha-verification)
     - [Substitution of build targets](#substitution-of-build-targets)
     - [Packaging](#packaging)
     - [Classifiers](#classifiers)
@@ -29,7 +30,7 @@ Release: `1.0`
     - [maven_jvm_artifact](#maven_jvm_artifact)
   - [Limitations](#limitations)
   - [Other Usage Notes](#other-usage-notes)
-    - [Caches](#caches)
+    - [Build state invalidation](#build-state-invalidation)
     - [Clogged WORKSPACE files](#clogged-workspace-files)
     - [Kotlin](#kotlin)
       - [ijar (abi-jar) and inline functions](#ijar-abi-jar-and-inline-functions)
@@ -186,6 +187,37 @@ The rules will reject artifacts without SHAs are not marked as "insecure".
 > Note: These rules cannot validate that the checksum is the right one, only that the one supplied
 > in configuration matches the checksum of the file downloaded.  It is the responsibility of the
 > maintainer to use proper security practices and obtain the expected checksum from a trusted source.
+
+### Pom file sha verification
+
+Artifacts can specify SHA256 checksums for their `.pom` files, via `artifacts`, in the form:
+```
+    artifacts = {
+        "com.google.guava:guava:25.0-jre": {
+            "sha256": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9",
+            "pom_sha256": "68c1ac2817572d6a6eb5c36072c37379f912ec75e99f6bc25aaa7ed2eb2b5ff1",
+        },
+    }
+```
+
+While this is the most secure option, it is also possible to omit this. If omitted, however, .pom
+files will be downloaded each time.  To ease development, an insecure cache mode exists for poms,
+accessible by offering a cache folder to the rule like so:
+
+```
+maven_repository_specification(
+    name = "maven",
+    cache_poms_insecurely = True,
+    insecure_sha_cache = ".cache/bazel_maven_repository/hashes", # can be omitted - this is the default
+    artifacts = {
+        "com.google.guava:guava:25.0-jre": { "sha256": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9"},
+    }
+)
+```
+
+This will cause the sha256 hashes for the various poms to be stored insecurely (as in, unverified)
+in the supplied cache directory.  This implies trusting the .pom you downloaded when the cache is
+being populated, and these are not checked in to the repository.
 
 ### Substitution of build targets
 
@@ -380,7 +412,7 @@ maven_jvm_artifact(
 
 ## Other Usage Notes
 
-### Caches
+### Build state invalidation
 
 Because of the nature of bazel repository/workspace operation, updating the list of artifacts may
 invalidate build caches, and force a re-run of workspace operations (and possibly reduce
