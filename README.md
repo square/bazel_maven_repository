@@ -207,7 +207,8 @@ accessible by offering a cache folder to the rule like so:
 ```
 maven_repository_specification(
     name = "maven",
-    insecure_pom_cache = ".cache/bazel_maven_repository/pom_hashes",
+    cache_poms_insecurely = True,
+    insecure_sha_cache = ".cache/bazel_maven_repository/hashes", # can be omitted - this is the default
     artifacts = {
         "com.google.guava:guava:25.0-jre": { "sha256": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9"},
     }

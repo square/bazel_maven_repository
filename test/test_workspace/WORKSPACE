@@ -42,11 +42,14 @@ kt_register_toolchains()
 maven_repository_specification(
     name = "maven",
 
-    # If supplied, then any pom files for which a pom_sha256 attribute is not supplied will be
+    # If true, then any pom files for which a pom_sha256 attribute is not supplied will be
     # insecurely cached (after first download) using hashes stored in this folder.
+    cache_poms_insecurely = True, # default False
+
+    # If supplied, this will be the alternate location for insecure sha hashes.
     #
     # This can be an absolute or a path relative to ${HOME}
-    insecure_pom_cache=".cache/bazel_pom_cache",
+    insecure_cache=".cache/bazel_maven_repository", # This is the default
 
     # The artifact spec list.
     artifacts = {

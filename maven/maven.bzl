@@ -62,6 +62,8 @@ mkdir -p $(dirname "${cache_file}")
 echo "${content}" > ${cache_file}
 """
 
+_POM_HASH_INFIX = "sha256"
+
 def _fetch_artifact_impl(ctx):
     repository_root_path = ctx.path(".")
     forbidden_files = [
@@ -129,10 +131,10 @@ def _get_pom_sha256(ctx, artifact, urls, file):
     explicit_sha256 = ctx.attr.pom_sha256_hashes.get(artifact.original_spec)
     if explicit_sha256:
         return explicit_sha256
-    if ctx.attr.insecure_pom_cache.startswith("/"):
-        cache_dir = ctx.attr.insecure_pom_cache
+    if ctx.attr.insecure_cache.startswith("/"):
+        cache_dir = "%s/%s" % (ctx.attr.insecure_cache, _POM_HASH_INFIX)
     else:
-        cache_dir = "%s/%s" % (ctx.os.environ["HOME"], ctx.attr.insecure_pom_cache)
+        cache_dir = "%s/%s/%s" % (ctx.os.environ["HOME"], ctx.attr.insecure_cache, _POM_HASH_INFIX)
     cached_file = "%s/%s.sha256" % (cache_dir, file)
     sha_cache_result = ctx.execute(["cat", cached_file])
     if sha_cache_result.return_code != 0:
@@ -163,7 +165,7 @@ def _fetch_pom(ctx, artifact):
     )
     ctx.report_progress("Fetching %s" % file)
 
-    sha256 = _get_pom_sha256(ctx, artifact, urls, file) if ctx.attr.insecure_pom_cache else None
+    sha256 = _get_pom_sha256(ctx, artifact, urls, file) if ctx.attr.cache_poms_insecurely else None
     if sha256:
         ctx.download(url = urls, sha256 = sha256, output = file)
     else:
@@ -288,7 +290,8 @@ _generate_maven_repository = repository_rule(
         "maven_rules_repository": attr.string(mandatory = False, default = "maven_repository_rules"),
         "dependency_target_substitutes": attr.string_list_dict(mandatory = True),
         "build_snippets": attr.string_dict(mandatory = True),
-        "insecure_pom_cache": attr.string(mandatory = False),
+        "cache_poms_insecurely": attr.bool(mandatory = True),
+        "insecure_cache": attr.string(mandatory = False),
         "pom_sha256_hashes": attr.string_dict(mandatory = True),
     },
 )
@@ -397,7 +400,8 @@ def _maven_repository_specification(
         build_substitutes = {},
         dependency_target_substitutes = {},
         repository_urls = ["https://repo1.maven.org/maven2"],
-        insecure_pom_cache = None):
+        cache_poms_insecurely = False,
+        insecure_cache = None):
     _handle_legacy_specifications(artifact_declarations, insecure_artifacts, build_substitutes)
 
     if len(repository_urls) == 0:
@@ -444,7 +448,8 @@ def _maven_repository_specification(
         repository_urls = repository_urls,
         dependency_target_substitutes = dependency_target_substitutes_rewritten,
         build_snippets = build_snippets,
-        insecure_pom_cache = insecure_pom_cache,
+        cache_poms_insecurely = cache_poms_insecurely,
+        insecure_cache = insecure_cache,
         pom_sha256_hashes = pom_sha256_hashes,
     )
 
@@ -503,11 +508,14 @@ def maven_repository_specification(
         # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
         repository_urls = ["https://repo1.maven.org/maven2"],
 
+        # If True, then cache poms based on the sha256 of the first downloaded occurrance.
+        cache_poms_insecurely = False,
+
         # Supply a cache directory (relative to $HOME of the current user, or absolute) into which
         # to cache the pom file hashes, which will enable them to participate in the content-
         # addressable cache.  By default they are not cached locally unless pom_sha256 is supplied
         # for that artifact.
-        insecure_pom_cache = None):
+        insecure_cache = ".cache/bazel_maven_repository/hashes"):
     # Redirected to _maven_repository_specification to allow the public parameter "artifacts" without conflicting
     # with the artifact utility struct.
     _maven_repository_specification(
@@ -517,5 +525,6 @@ def maven_repository_specification(
         build_substitutes = build_substitutes,
         dependency_target_substitutes = dependency_target_substitutes,
         repository_urls = repository_urls,
-        insecure_pom_cache = insecure_pom_cache,
+        cache_poms_insecurely = cache_poms_insecurely,
+        insecure_cache = insecure_cache,
     )
