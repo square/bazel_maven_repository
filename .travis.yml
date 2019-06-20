@@ -1,4 +1,4 @@
-dist: trusty
+dist: xenial
 
 language: generic
 
@@ -9,10 +9,12 @@ os:
 env:
   global:
     - BAZEL_DOWNLOAD_PREFIX=https://github.com/bazelbuild/bazel/releases/download
-    - BAZEL_VERSION="0.26.1"
+
   matrix:
-    - SEGMENT="."
-    - SEGMENT="test/test_workspace"
+    - SEGMENT="." BAZEL_VERSION="0.26.1"
+    - SEGMENT="test/test_workspace" BAZEL_VERSION="0.26.1"
+    - SEGMENT="." BAZEL_VERSION="0.27.0"
+    - SEGMENT="test/test_workspace" BAZEL_VERSION="0.27.0"
 
 addons:
   apt:
@@ -21,6 +23,11 @@ addons:
     packages:
       - wget
       - pkg-config
+      - zip
+      - g++
+      - zlib1g-dev
+      - unzip
+      - python3
   homebrew:
     packages:
       - wget
