@@ -17,8 +17,8 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 KOTLIN_VERSION = "1.3.31"
 KOTLINC_ROOT = "https://github.com/JetBrains/kotlin/releases/download"
 KOTLINC_SHA = "107325d56315af4f59ff28db6837d03c2660088e3efeb7d4e41f3e01bb848d6a"
-KOTLIN_RULES_VERSION = "legacy-modded-0_26_1-01"
-KOTLIN_RULES_SHA = "b943379a6b48156cb542cee4502a463a6e2edeb307d1a4cabd0309ca2bf3f10f"
+KOTLIN_RULES_VERSION = "legacy-modded-0_26_1-02"
+KOTLIN_RULES_SHA = "245d0bc1511048aaf82afd0fa8a83e8c3b5afdff0ae4fbcae25e03bb2c6f1a1a"
 
 http_archive(
     name = "io_bazel_rules_kotlin",
