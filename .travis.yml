@@ -11,10 +11,16 @@ env:
     - BAZEL_DOWNLOAD_PREFIX=https://github.com/bazelbuild/bazel/releases/download
 
   matrix:
-    - SEGMENT="." BAZEL_VERSION="0.26.1"
-    - SEGMENT="test/test_workspace" BAZEL_VERSION="0.26.1"
-    - SEGMENT="." BAZEL_VERSION="0.27.0"
-    - SEGMENT="test/test_workspace" BAZEL_VERSION="0.27.0"
+    - BAZEL_VERSION="0.26.1" SEGMENT="."
+    - BAZEL_VERSION="0.26.1" SEGMENT="test/test_workspace"
+    - BAZEL_VERSION="0.27.0" SEGMENT="."
+    - BAZEL_VERSION="0.27.0" SEGMENT="test/test_workspace"
+    - BAZEL_VERSION="0.27.1" SEGMENT="."
+    - BAZEL_VERSION="0.27.1" SEGMENT="test/test_workspace"
+    - BAZEL_VERSION="0.27.2" SEGMENT="."
+    - BAZEL_VERSION="0.27.2" SEGMENT="test/test_workspace"
+    - BAZEL_VERSION="0.28.0" SEGMENT="."
+    - BAZEL_VERSION="0.28.0" SEGMENT="test/test_workspace"
 
 addons:
   apt:
