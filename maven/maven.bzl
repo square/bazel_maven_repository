@@ -14,7 +14,9 @@
 # Description:
 #   A repository rule intended to be used in populating @maven_repository.
 #
-load(":artifacts.bzl", "artifacts")
+load(":artifacts.bzl", artifact_utils = "artifacts")
+load(":constants.bzl", "DOWNLOAD_PREFIX")
+load(":fetch.bzl", "fetch")
 load(":jvm.bzl", "raw_jvm_import")
 load(":poms.bzl", "poms")
 load(":sets.bzl", "sets")
@@ -31,7 +33,6 @@ artifact_config_properties = struct(
     values = ["sha256", "pom_sha256", "insecure", "exclude", "build_snippet", "testonly"],
 )
 
-_DOWNLOAD_PREFIX = "maven"
 _RUNTIME_DEPENDENCY_SCOPES = sets.new("compile", "runtime")
 _POM_XPATH_DEPENDENCIES_QUERY = """/project/dependencies/dependency[not(scope) or scope/text()="compile"]"""
 _INSECURE_DEPRECATION_WARNING = """WARNING: Using "insecure_artifacts" is deprecated.
@@ -46,13 +47,6 @@ artifacts = {
 }"""
 _LEGACY_BUILD_SUBSTITUTIONS_DEPRECATION_WARNING = """WARNING: Passing the build snippet via build_substitutes is deprecated.
 Please pass the snippet for %s as a configuration property in the artifact dictionary."""
-_ARTIFACT_DOWNLOAD_BUILD_FILE_TEMPLATE = """
-package(default_visibility = ["//visibility:public"])
-filegroup(
-    name = "{prefix}",
-    srcs = ["{path}"],
-)
-"""
 
 _POM_HASH_CACHE_WRITE_SCRIPT = "bin/pom_hash_cache_write.sh"
 
@@ -65,36 +59,6 @@ echo "${content}" > ${cache_file}
 """
 
 _POM_HASH_INFIX = "sha256"
-
-def _fetch_artifact_impl(ctx):
-    repository_root_path = ctx.path(".")
-    forbidden_files = [
-        repository_root_path,
-        ctx.path("WORKSPACE"),
-        ctx.path("BUILD"),
-        ctx.path("BUILD.bazel"),
-        ctx.path("%s/BUILD" % _DOWNLOAD_PREFIX),
-        ctx.path("%s/BUILD.bazel" % _DOWNLOAD_PREFIX),
-    ]
-    local_path = "%s/%s" % (_DOWNLOAD_PREFIX, ctx.attr.local_path)
-    download_path = ctx.path(local_path)
-    if download_path in forbidden_files or not str(download_path).startswith(str(repository_root_path)):
-        fail("Invalid local_path: %s" % ctx.attr.local_path)
-    ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
-    ctx.file(
-        "%s/BUILD.bazel" % _DOWNLOAD_PREFIX,
-        _ARTIFACT_DOWNLOAD_BUILD_FILE_TEMPLATE.format(prefix = _DOWNLOAD_PREFIX, path = ctx.attr.local_path),
-    )
-    ctx.download(url = ctx.attr.urls, output = local_path, sha256 = ctx.attr.sha256)
-
-_fetch_artifact = repository_rule(
-    implementation = _fetch_artifact_impl,
-    attrs = {
-        "local_path": attr.string(),
-        "sha256": attr.string(),
-        "urls": attr.string_list(mandatory = True),
-    },
-)
 
 _MAVEN_REPO_BUILD_PREFIX = """# Generated bazel build file for maven group {group_id}
 
@@ -109,7 +73,7 @@ _MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
 
 def _convert_maven_dep(repo_name, artifact):
     group_path = artifact.group_id.replace(".", "/")
-    target = artifacts.munge_target(artifact.artifact_id)
+    target = artifact_utils.munge_target(artifact.artifact_id)
     return "@{repo}//{group_path}:{target}".format(repo = repo_name, group_path = group_path, target = target)
 
 def _normalize_target(full_target_spec, current_package, target_substitutions):
@@ -183,7 +147,7 @@ def _get_inheritance_chain(ctx, xml_text):
         raw_parent_artifact = poms.extract_parent(current)
         if not bool(raw_parent_artifact):
             break
-        parent_artifact = artifacts.annotate(raw_parent_artifact)
+        parent_artifact = artifact_utils.annotate(raw_parent_artifact)
         parent_node = poms.parse(_fetch_pom(ctx, parent_artifact))
         inheritance_chain += [parent_node]
         current = parent_node
@@ -237,7 +201,7 @@ def _generate_maven_repository_impl(ctx):
     test_only_artifacts = sets.copy_of(ctx.attr.test_only_artifacts)
     processed_artifacts = sets.new()
     for specs in ctx.attr.grouped_artifacts.values():
-        artifact_structs = [artifacts.parse_spec(s) for s in specs]
+        artifact_structs = [artifact_utils.parse_spec(s) for s in specs]
         sets.add_all(processed_artifacts, ["%s:%s" % (a.group_id, a.artifact_id) for a in artifact_structs])
     build_files = {}
     for group_id, specs_list in ctx.attr.grouped_artifacts.items():
@@ -251,7 +215,7 @@ def _generate_maven_repository_impl(ctx):
         target_definitions = []
         group_path = group_id.replace(".", "/")
         for spec in specs:
-            artifact = artifacts.annotate(artifacts.parse_spec(spec))
+            artifact = artifact_utils.annotate(artifact_utils.parse_spec(spec))
             coordinates = "%s:%s" % (artifact.group_id, artifact.artifact_id)
             sets.add(processed_artifacts, coordinates)
             snippet = build_snippets.get(coordinates)
@@ -293,8 +257,6 @@ def _generate_maven_repository_impl(ctx):
         content = "\n".join([prefix] + target_definitions)
         ctx.file(file, content)
 
-# build_files[build_file] = build_content
-
 _generate_maven_repository = repository_rule(
     implementation = _generate_maven_repository_impl,
     attrs = {
@@ -313,8 +275,8 @@ _generate_maven_repository = repository_rule(
 
 # Implementation of the maven_jvm_artifact rule.
 def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], **kwargs):
-    artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
-    maven_target = "@%s//%s:%s" % (artifact.maven_target_name, _DOWNLOAD_PREFIX, artifact.path)
+    artifact = artifact_utils.annotate(artifact_utils.parse_spec(artifact_spec))
+    maven_target = "@%s//%s:%s" % (artifact.maven_target_name, DOWNLOAD_PREFIX, artifact.path)
     target_name = name if name else artifact.third_party_target_name
     if artifact.packaging == "jar":
         raw_jvm_import(name = target_name, deps = deps, visibility = visibility, jar = maven_target, **kwargs)
@@ -328,7 +290,7 @@ def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], **kwargs):
 def _check_for_duplicates(artifact_specs):
     distinct_artifacts = {}
     for artifact_spec in artifact_specs:
-        artifact = artifacts.parse_spec(artifact_spec)
+        artifact = artifact_utils.parse_spec(artifact_spec)
         distinct = "%s:%s" % (artifact.group_id, artifact.artifact_id)
         if not distinct_artifacts.get(distinct):
             distinct_artifacts[distinct] = {}
@@ -343,14 +305,12 @@ def _unsupported_keys(keys_list):
     return sets.difference(sets.copy_of(artifact_config_properties.values), sets.copy_of(keys_list))
 
 def _fix_string_booleans(value):
-    if type(value) == type(""):
-        return value.lower() == "true"
-    return bool(value)
+    return value.lower() == "true" if type(value) == type("") else bool(value)
 
 # If artifact/sha pair has missing sha hashes, reject it.
 def _validate_artifacts(artifact_definitions):
     errors = []
-    if not bool(artifacts):
+    if not bool(artifact_definitions):
         errors += ["At least one artifact must be specified."]
     for spec, properties in artifact_definitions.items():
         if type(properties) != type({}):
@@ -362,7 +322,7 @@ def _validate_artifacts(artifact_definitions):
                 list(unsupported_keys),
                 list(artifact_config_properties.values),
             )]
-        artifact = artifacts.parse_spec(spec)  # Basic sanity check.
+        artifact = artifact_utils.parse_spec(spec)  # Basic sanity check.
         if not bool(artifact.version):
             errors += ["""Artifact "%s" missing version""" % spec]
         if (not properties.get(artifact_config_properties.SHA256) and
@@ -390,7 +350,7 @@ def _handle_legacy_specifications(artifact_declarations, insecure_artifacts, bui
     # map versioned artifacts to versionless
     versionless_mapping = {}
     for key in artifact_declarations:
-        artifact = artifacts.parse_spec(key)
+        artifact = artifact_utils.parse_spec(key)
         versionless_mapping["%s:%s" % (artifact.group_id, artifact.artifact_id)] = key
     for key, snippet in build_snippets.items():
         versioned_key = versionless_mapping.get(key)
@@ -432,7 +392,7 @@ def _maven_repository_specification(
     test_only_artifacts = []
     exclusions = {}
     for artifact_spec, properties in artifact_declarations.items():
-        artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
+        artifact = artifact_utils.annotate(artifact_utils.parse_spec(artifact_spec))
 
         # Track group_ids in order to build per-group BUILD.bazel files.
         grouped_artifacts[artifact.group_id] = (
@@ -440,7 +400,7 @@ def _maven_repository_specification(
         )
         sha256 = properties.get(artifact_config_properties.SHA256)
         urls = ["%s/%s" % (repo, artifact.path) for repo in repository_urls]
-        _fetch_artifact(
+        fetch.artifact(
             name = artifact.maven_target_name,
             urls = urls,
             local_path = artifact.path,
