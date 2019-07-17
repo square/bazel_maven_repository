@@ -75,7 +75,11 @@ maven_repository_specification(
         "com.google.code.findbugs:jsr305:3.0.2": {"insecure": True},
         "com.google.errorprone:javac-shaded:9+181-r4173-1": {"insecure": True},
         "com.google.googlejavaformat:google-java-format:1.6": {"insecure": True},
-        "com.google.truth:truth:0.42": {"insecure": True, "testonly": True},
+        "com.google.truth:truth:0.42": {
+            "insecure": True,
+            "testonly": True,
+            "exclude": ["org.checkerframework:checker-qual"], # for demonstration - don't alter truth in a real project.
+        },
         "com.squareup:javapoet:1.11.1": {"insecure": True},
         "io.reactivex.rxjava2:rxjava:2.2.6": {"insecure": True},
         "org.reactivestreams:reactive-streams:1.0.2": {"insecure": True},

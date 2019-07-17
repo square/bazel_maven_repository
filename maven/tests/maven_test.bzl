@@ -167,6 +167,23 @@ def get_effective_pom_test(env):
     asserts.equals(env, "1.0", xml.find_first(merged, "version").content, "version")
     asserts.equals(env, "jar", xml.find_first(merged, "packaging").content, "packaging")
 
+def get_dependencies_from_project_test(env):
+    fake_ctx = struct(
+        download = _noop_download,
+        read = _fake_read_for_get_parent_chain,
+        attr = struct(repository_urls = [_FAKE_URL_PREFIX], cache_poms_insecurely = False),
+        report_progress = _noop_report_progress,
+    )
+    project = for_testing.get_effective_pom(for_testing.get_inheritance_chain(fake_ctx, COMPLEX_POM))
+
+    # confirm junit is present.  This is just a precondition assertion, testing the baseline deps mechanism
+    dependencies = [d.coordinate for d in for_testing.get_dependencies_from_project(fake_ctx, [], project)]
+    asserts.true(env, sets.contains(sets.copy_of(dependencies), "junit:junit"), "Should contain junit:junit")
+
+    # confirm junit is excluded
+    dependencies = [d.coordinate for d in for_testing.get_dependencies_from_project(fake_ctx, ["junit:junit"], project)]
+    asserts.false(env, sets.contains(sets.copy_of(dependencies), "junit:junit"), "Should NOT contain junit:junit")
+
 # Roll-up function.
 def suite():
     return test_suite(
@@ -181,5 +198,6 @@ def suite():
             get_pom_sha256_predefined_test,
             get_parent_chain_test,
             get_effective_pom_test,
+            get_dependencies_from_project_test,
         ],
     )
