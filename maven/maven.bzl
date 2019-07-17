@@ -25,9 +25,10 @@ artifact_config_properties = struct(
     SHA256 = "sha256",
     POM_SHA256 = "pom_sha256",
     INSECURE = "insecure",
+    EXCLUDE = "exclude",
     BUILD_SNIPPET = "build_snippet",
     TEST_ONLY = "testonly",
-    values = ["sha256", "pom_sha256", "insecure", "build_snippet", "testonly"],
+    values = ["sha256", "pom_sha256", "insecure", "exclude", "build_snippet", "testonly"],
 )
 
 _DOWNLOAD_PREFIX = "maven"
@@ -196,10 +197,15 @@ def _get_effective_pom(inheritance_chain):
         merged = poms.merge_parent(parent = merged, child = next)
     return merged
 
+# Extract the artifact's dependencies (accounting for pom inheritance), excluding those artifacts explicitly excluded.
 def _get_dependencies_from_pom_files(ctx, artifact):
     inheritance_chain = _get_inheritance_chain(ctx, _fetch_pom(ctx, artifact))
     project = _get_effective_pom(inheritance_chain)
-    maven_deps = poms.extract_dependencies(project)
+    return _get_dependencies_from_project(ctx, ctx.attr.exclusions.get(artifact.original_spec, []), project)
+
+def _get_dependencies_from_project(ctx, exclusions, project):
+    exclusions = sets.copy_of(exclusions)
+    maven_deps = [d for d in poms.extract_dependencies(project) if not sets.contains(exclusions, d.coordinate)]
     return maven_deps
 
 def _deps_string(bazel_deps):
@@ -300,6 +306,7 @@ _generate_maven_repository = repository_rule(
         "insecure_cache": attr.string(mandatory = False),
         "pom_sha256_hashes": attr.string_dict(mandatory = True),
         "test_only_artifacts": attr.string_list(mandatory = True),
+        "exclusions": attr.string_list_dict(mandatory = True),
     },
 )
 
@@ -423,6 +430,7 @@ def _maven_repository_specification(
     build_snippets = {}
     pom_sha256_hashes = {}
     test_only_artifacts = []
+    exclusions = {}
     for artifact_spec, properties in artifact_declarations.items():
         artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
 
@@ -449,10 +457,12 @@ def _maven_repository_specification(
         if bool(properties.get(artifact_config_properties.TEST_ONLY)):
             test_only_artifacts += [artifact_spec]
 
+        if bool(properties.get(artifact_config_properties.EXCLUDE)):
+            exclusions[artifact_spec] = properties.get(artifact_config_properties.EXCLUDE)
+
     # Skylark rules can't take in arbitrarily deep dicts, so we rewrite dict(string->dict(string, string)) to an
     # encoded (but trivially splittable) dict(string->list(string)).  Yes it's gross.
     dependency_target_substitutes_rewritten = dicts.encode_nested(dependency_target_substitutes)
-
     _generate_maven_repository(
         name = name,
         grouped_artifacts = grouped_artifacts,
@@ -463,6 +473,7 @@ def _maven_repository_specification(
         insecure_cache = insecure_cache,
         pom_sha256_hashes = pom_sha256_hashes,
         test_only_artifacts = test_only_artifacts,
+        exclusions = exclusions,
     )
 
 for_testing = struct(
@@ -472,6 +483,7 @@ for_testing = struct(
     get_pom_sha256 = _get_pom_sha256,
     get_inheritance_chain = _get_inheritance_chain,
     get_effective_pom = _get_effective_pom,
+    get_dependencies_from_project = _get_dependencies_from_project,
 )
 
 ####################
