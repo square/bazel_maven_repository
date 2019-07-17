@@ -273,18 +273,6 @@ _generate_maven_repository = repository_rule(
     },
 )
 
-# Implementation of the maven_jvm_artifact rule.
-def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], **kwargs):
-    artifact = artifact_utils.annotate(artifact_utils.parse_spec(artifact_spec))
-    maven_target = "@%s//%s:%s" % (artifact.maven_target_name, DOWNLOAD_PREFIX, artifact.path)
-    target_name = name if name else artifact.third_party_target_name
-    if artifact.packaging == "jar":
-        raw_jvm_import(name = target_name, deps = deps, visibility = visibility, jar = maven_target, **kwargs)
-    elif artifact.packaging == "aar":
-        native.aar_import(name = target_name, deps = deps, visibility = visibility, aar = maven_target, **kwargs)
-    else:
-        fail("Packaging %s not supported by maven_jvm_artifact." % artifact.packaging)
-
 # Check... you know... for duplicates.  And fail if there are any, listing the extra artifacts.  Also fail if
 # there are -SNAPSHOT versions, since bazel requires pinned versions.
 def _check_for_duplicates(artifact_specs):
@@ -308,11 +296,11 @@ def _fix_string_booleans(value):
     return value.lower() == "true" if type(value) == type("") else bool(value)
 
 # If artifact/sha pair has missing sha hashes, reject it.
-def _validate_artifacts(artifact_definitions):
+def _validate_artifacts(artifacts):
     errors = []
-    if not bool(artifact_definitions):
+    if not bool(artifacts):
         errors += ["At least one artifact must be specified."]
-    for spec, properties in artifact_definitions.items():
+    for spec, properties in artifacts.items():
         if type(properties) != type({}):
             errors += ["""Artifact %s has an invalid property dictionary. Should not be a %s""", (spec, type(properties))]
         unsupported_keys = _unsupported_keys(properties.keys())
@@ -334,126 +322,63 @@ def _validate_artifacts(artifact_definitions):
     if bool(errors):
         fail("Errors found:\n    %s" % "\n    ".join(errors))
 
-# Pre-process the artifact_declarations dictionary and handle older APIs that are now deprecated, until we
+# Pre-process the artifacts dictionary and handle older APIs that are now deprecated, until we
 # delete them.
-def _handle_legacy_specifications(artifact_declarations, insecure_artifacts, build_snippets):
+def _handle_legacy_specifications(artifacts, insecure_artifacts, build_snippets):
     # Legacy deprecated feature backwards compatibility
     for spec in insecure_artifacts:
         print(_INSECURE_DEPRECATION_WARNING % spec)
-        artifact_declarations += {spec: {"insecure": "true"}}
-    for key in artifact_declarations.keys():
-        value = artifact_declarations[key]
+        artifacts += {spec: {"insecure": "true"}}
+    for key in artifacts.keys():
+        value = artifacts[key]
         if type(value) == type(""):
             print(_STRING_SHA_VALUE_DEPRECATION_WARNING % (key, value))
-            artifact_declarations[key] = {artifact_config_properties.SHA256: value}
+            artifacts[key] = {artifact_config_properties.SHA256: value}
 
     # map versioned artifacts to versionless
     versionless_mapping = {}
-    for key in artifact_declarations:
+    for key in artifacts:
         artifact = artifact_utils.parse_spec(key)
         versionless_mapping["%s:%s" % (artifact.group_id, artifact.artifact_id)] = key
     for key, snippet in build_snippets.items():
         versioned_key = versionless_mapping.get(key)
         if not bool(versioned_key):
             fail("Artifact %s listed in build_substitutions not present in main artifact list.", key)
-        config = artifact_declarations[versioned_key]
+        config = artifacts[versioned_key]
         config[artifact_config_properties.BUILD_SNIPPET] = snippet
         print(_LEGACY_BUILD_SUBSTITUTIONS_DEPRECATION_WARNING % versioned_key)
-    return artifact_declarations
+    return artifacts
 
-# The implementation of maven_repository_specification.
-#
-# Validates that all artifacts have sha hashes (or are in insecure_artifacts), splits artifacts into groups based on
-# their groupId, generates a fetch rule for each artifact, and calls the rule which generates the internal bazel
-# repository which replicates the maven repo structure.
-#
-def _maven_repository_specification(
-        name,
-        artifact_declarations = {},
-        insecure_artifacts = [],
-        build_substitutes = {},
-        dependency_target_substitutes = {},
-        repository_urls = ["https://repo1.maven.org/maven2"],
-        cache_poms_insecurely = False,
-        insecure_cache = None):
-    _handle_legacy_specifications(artifact_declarations, insecure_artifacts, build_substitutes)
-
-    if len(repository_urls) == 0:
-        fail("You must specify at least one repository root url.")
-    if len(artifact_declarations) == 0:
-        fail("You must register at least one artifact.")
-
-    _validate_artifacts(artifact_declarations)
-
-    _check_for_duplicates(artifact_declarations)
-    grouped_artifacts = {}
-    build_snippets = {}
-    pom_sha256_hashes = {}
-    test_only_artifacts = []
-    exclusions = {}
-    for artifact_spec, properties in artifact_declarations.items():
-        artifact = artifact_utils.annotate(artifact_utils.parse_spec(artifact_spec))
-
-        # Track group_ids in order to build per-group BUILD.bazel files.
-        grouped_artifacts[artifact.group_id] = (
-            grouped_artifacts.get(artifact.group_id, default = []) + [artifact.original_spec]
-        )
-        sha256 = properties.get(artifact_config_properties.SHA256)
-        urls = ["%s/%s" % (repo, artifact.path) for repo in repository_urls]
-        fetch.artifact(
-            name = artifact.maven_target_name,
-            urls = urls,
-            local_path = artifact.path,
-            sha256 = sha256,
-        )
-        snippet = properties.get(artifact_config_properties.BUILD_SNIPPET)
-        if bool(snippet):
-            build_snippets["%s:%s" % (artifact.group_id, artifact.artifact_id)] = snippet
-
-        pom_sha256_hash = properties.get(artifact_config_properties.POM_SHA256)
-        if bool(pom_sha256_hash):
-            pom_sha256_hashes[artifact_spec] = pom_sha256_hash
-
-        if bool(properties.get(artifact_config_properties.TEST_ONLY)):
-            test_only_artifacts += [artifact_spec]
-
-        if bool(properties.get(artifact_config_properties.EXCLUDE)):
-            exclusions[artifact_spec] = properties.get(artifact_config_properties.EXCLUDE)
-
-    # Skylark rules can't take in arbitrarily deep dicts, so we rewrite dict(string->dict(string, string)) to an
-    # encoded (but trivially splittable) dict(string->list(string)).  Yes it's gross.
-    dependency_target_substitutes_rewritten = dicts.encode_nested(dependency_target_substitutes)
-    _generate_maven_repository(
-        name = name,
-        grouped_artifacts = grouped_artifacts,
-        repository_urls = repository_urls,
-        dependency_target_substitutes = dependency_target_substitutes_rewritten,
-        build_snippets = build_snippets,
-        cache_poms_insecurely = cache_poms_insecurely,
-        insecure_cache = insecure_cache,
-        pom_sha256_hashes = pom_sha256_hashes,
-        test_only_artifacts = test_only_artifacts,
-        exclusions = exclusions,
-    )
-
-for_testing = struct(
-    unsupported_keys = _unsupported_keys,
-    handle_legacy_specifications = _handle_legacy_specifications,
-    fetch_pom = _fetch_pom,
-    get_pom_sha256 = _get_pom_sha256,
-    get_inheritance_chain = _get_inheritance_chain,
-    get_effective_pom = _get_effective_pom,
-    get_dependencies_from_project = _get_dependencies_from_project,
-)
 
 ####################
 # PUBLIC FUNCTIONS #
 ####################
 
 # Creates java or android library targets from maven_hosted .jar/.aar files.
-def maven_jvm_artifact(artifact, name = None, deps = [], visibility = ["//visibility:public"], **kwargs):
-    # redirect to _maven_jvm_artifact, so we can externally use the name "artifact" but internally use artifact_spec
-    _maven_jvm_artifact(artifact_spec = artifact, name = name, deps = deps, visibility = visibility, **kwargs)
+def maven_jvm_artifact(
+        # The specification of the artifact (e.g. "com.google.guava:guava:1.2.3")
+        artifact,
+
+        # The name of this target, typically the same as the artifact_id of the artifact.
+        name = None,
+
+        # Visibility of this target (default: ["//visibility:public"])
+        visibility = ["//visibility:public"],
+
+        # Any dependencies of this artifact.
+        deps = [],
+
+        # Extra arguments passed through to the raw import rules that underly this macro.
+        **kwargs):
+    artifact_struct = artifact_utils.annotate(artifact_utils.parse_spec(artifact))
+    maven_target = "@%s//%s:%s" % (artifact_struct.maven_target_name, DOWNLOAD_PREFIX, artifact_struct.path)
+    target_name = name if name else artifact_struct.third_party_target_name
+    if artifact_struct.packaging == "jar":
+        raw_jvm_import(name = target_name, deps = deps, visibility = visibility, jar = maven_target, **kwargs)
+    elif artifact_struct.packaging == "aar":
+        native.aar_import(name = target_name, deps = deps, visibility = visibility, aar = maven_target, **kwargs)
+    else:
+        fail("Packaging %s not supported by maven_jvm_artifact." % artifact_struct.packaging)
 
 # Description:
 #   Generates the bazel repo and download logic for each artifact (and repository URL prefixes) in the WORKSPACE
@@ -500,15 +425,77 @@ def maven_repository_specification(
         # addressable cache.  By default they are not cached locally unless pom_sha256 is supplied
         # for that artifact.
         insecure_cache = ".cache/bazel_maven_repository/hashes"):
-    # Redirected to _maven_repository_specification to allow the public parameter "artifacts" without conflicting
-    # with the artifact utility struct.
-    _maven_repository_specification(
+
+    _handle_legacy_specifications(artifacts, insecure_artifacts, build_substitutes)
+
+    if len(repository_urls) == 0:
+        fail("You must specify at least one repository root url.")
+    if len(artifacts) == 0:
+        fail("You must register at least one artifact.")
+
+    _validate_artifacts(artifacts)
+
+    _check_for_duplicates(artifacts)
+    grouped_artifacts = {}
+    build_snippets = {}
+    pom_sha256_hashes = {}
+    test_only_artifacts = []
+    exclusions = {}
+    for artifact_spec, properties in artifacts.items():
+        artifact = artifact_utils.annotate(artifact_utils.parse_spec(artifact_spec))
+
+        # Track group_ids in order to build per-group BUILD.bazel files.
+        grouped_artifacts[artifact.group_id] = (
+            grouped_artifacts.get(artifact.group_id, default = []) + [artifact.original_spec]
+        )
+        sha256 = properties.get(artifact_config_properties.SHA256)
+        urls = ["%s/%s" % (repo, artifact.path) for repo in repository_urls]
+        fetch.artifact(
+            name = artifact.maven_target_name,
+            urls = urls,
+            local_path = artifact.path,
+            sha256 = sha256,
+        )
+        snippet = properties.get(artifact_config_properties.BUILD_SNIPPET)
+        if bool(snippet):
+            build_snippets["%s:%s" % (artifact.group_id, artifact.artifact_id)] = snippet
+
+        pom_sha256_hash = properties.get(artifact_config_properties.POM_SHA256)
+        if bool(pom_sha256_hash):
+            pom_sha256_hashes[artifact_spec] = pom_sha256_hash
+
+        if bool(properties.get(artifact_config_properties.TEST_ONLY)):
+            test_only_artifacts += [artifact_spec]
+
+        if bool(properties.get(artifact_config_properties.EXCLUDE)):
+            exclusions[artifact_spec] = properties.get(artifact_config_properties.EXCLUDE)
+
+    # Skylark rules can't take in arbitrarily deep dicts, so we rewrite dict(string->dict(string, string)) to an
+    # encoded (but trivially splittable) dict(string->list(string)).  Yes it's gross.
+    dependency_target_substitutes_rewritten = dicts.encode_nested(dependency_target_substitutes)
+    _generate_maven_repository(
         name = name,
-        artifact_declarations = artifacts,
-        insecure_artifacts = insecure_artifacts,
-        build_substitutes = build_substitutes,
-        dependency_target_substitutes = dependency_target_substitutes,
+        grouped_artifacts = grouped_artifacts,
         repository_urls = repository_urls,
+        dependency_target_substitutes = dependency_target_substitutes_rewritten,
+        build_snippets = build_snippets,
         cache_poms_insecurely = cache_poms_insecurely,
         insecure_cache = insecure_cache,
+        pom_sha256_hashes = pom_sha256_hashes,
+        test_only_artifacts = test_only_artifacts,
+        exclusions = exclusions,
     )
+
+
+####################
+# Test-only Struct #
+####################
+for_testing = struct(
+    unsupported_keys = _unsupported_keys,
+    handle_legacy_specifications = _handle_legacy_specifications,
+    fetch_pom = _fetch_pom,
+    get_pom_sha256 = _get_pom_sha256,
+    get_inheritance_chain = _get_inheritance_chain,
+    get_effective_pom = _get_effective_pom,
+    get_dependencies_from_project = _get_dependencies_from_project,
+)
