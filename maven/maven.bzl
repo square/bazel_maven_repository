@@ -278,7 +278,8 @@ def _generate_maven_repository_impl(ctx):
                         list(unregistered_deps),
                     ))
                 test_only_subst = (
-                    "\n    testonly = True," if sets.contains(test_only_artifacts, spec) else "")
+                    "\n    testonly = True," if sets.contains(test_only_artifacts, spec) else ""
+                )
 
                 target_definitions.append(
                     _MAVEN_REPO_TARGET_TEMPLATE.format(
@@ -309,7 +310,6 @@ _generate_maven_repository = repository_rule(
         "exclusions": attr.string_list_dict(mandatory = True),
     },
 )
-
 
 # Implementation of the maven_jvm_artifact rule.
 def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], **kwargs):
