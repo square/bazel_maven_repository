@@ -13,9 +13,13 @@ def _trim(string, characters = "\n "):
 def _contains(string, substring):
     return not (string.find(substring) == -1)
 
+def _munge(artifact_id):
+    return artifact_id.replace("-", "_").replace(".", "_")
+
 strings = struct(
     contains = _contains,
     trim = _trim,
+    munge = _munge,
 )
 
 def _filename(string):

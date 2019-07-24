@@ -205,7 +205,7 @@ def _new_node(label, content = None, children = []):
     return struct(label = label, content = content, children = children)
 
 # Description:
-#   Returns the first node with the given label, if it's present in the children of the given node.
+#   Returns the first node with one of the given labels, if it's present in the children of the given node.
 def _find_first(node, *labels):
     stack = []
     current = node

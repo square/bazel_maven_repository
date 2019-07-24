@@ -50,6 +50,14 @@ SIMPLE_PROPERTIES_POM = POM_PREFIX + """
   </properties>
 """ + POM_SUFFIX
 
+SIMPLE_PACKAGING_AAR_POM = POM_PREFIX + """
+  <packaging>aar</packaging>
+""" + POM_SUFFIX
+
+SIMPLE_PACKAGING_BUNDLE_POM = POM_PREFIX + """
+  <packaging>bundle</packaging>
+""" + POM_SUFFIX
+
 GRANDPARENT_POM = POM_PREFIX + """
   <modelVersion>4.0.0</modelVersion>
   <groupId>test</groupId>
