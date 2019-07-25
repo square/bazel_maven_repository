@@ -277,11 +277,10 @@ def maven_jvm_artifact(
     artifact_struct = artifact_utils.annotate(artifact_utils.parse_spec(artifact))
     artifact_type = packaging_type.value_of(type) if bool(type) else packaging_type.value_of(artifact_struct.type)
     maven_target = fetch_repo.artifact_target(artifact_struct, artifact_type.suffix)
-    target_name = name if name else artifact_struct.third_party_target_name
     if artifact_type.suffix == "jar":
-        raw_jvm_import(name = target_name, deps = deps, visibility = visibility, jar = maven_target, **kwargs)
+        raw_jvm_import(name = name, deps = deps, visibility = visibility, jar = maven_target, **kwargs)
     elif artifact_type.suffix == "aar":
-        native.aar_import(name = target_name, deps = deps, visibility = visibility, aar = maven_target, **kwargs)
+        native.aar_import(name = name, deps = deps, visibility = visibility, aar = maven_target, **kwargs)
     else:
         fail("%s is not a supported artifact type. Currently only jar/aar are supported." % artifact_struct.type.name)
 
