@@ -159,8 +159,11 @@ def _fake_execute(args):
 def _pass_through_path(label):
     return label.name
 
+def _noop_report(string):
+    pass
+
 def get_parent_chain_test(env):
-    fake_ctx = struct(path = _pass_through_path, execute = _fake_execute)
+    fake_ctx = struct(path = _pass_through_path, execute = _fake_execute, report_progress = _noop_report)
     chain = for_testing.get_inheritance_chain(fake_ctx, artifacts.parse_spec("test.group:child:1.0"))
     actual_ids = [poms.extract_artifact_id(x) for x in chain]
     asserts.equals(env, ["child", "parent", "grandparent"], actual_ids)
