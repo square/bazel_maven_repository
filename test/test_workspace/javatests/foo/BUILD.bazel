@@ -1,14 +1,11 @@
 load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kt_jvm_test")
 
-package(default_visibility = ["//:__subpackages__"])
-
 kt_jvm_test(
     name = "BarTest",
     srcs = ["BarTest.kt"],
     test_class = "foo.BarTest",
     deps = [
         "//java/foo",
-        "@maven//com/google/truth",
         "@maven//junit",
         "@maven//org/jetbrains/kotlin:kotlin_test",
     ],
@@ -19,7 +16,6 @@ java_test(
     srcs = ["FooTest.java"],
     deps = [
         "//java/foo",
-        "@maven//com/google/truth",
         "@maven//junit",
     ],
 )

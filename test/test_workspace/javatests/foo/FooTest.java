@@ -9,7 +9,7 @@ public class FooTest {
     FooComponent fooComponent = FooComponent.create();
     fooComponent.bar();
 
+    // Force building the dagger component.
     Foo.Inner.builder().setFoo(foo).build();
   }
-
 }
