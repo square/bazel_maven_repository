@@ -30,19 +30,10 @@ echo "${content}" > ${cache_file}
 def _format_exported_files(paths):
     return "".join(["    \"%s\",\n" % path for path in paths])
 
-# The local path to the artifact/version subfolder in which all files should be found, according to
-# the standard maven layout
-def _artifact_parent_path(artifact):
-    return "{group_id}/{artifact_id}/{version}".format(
-        group_id = artifact.group_path,
-        artifact_id = artifact.artifact_id,
-        version = artifact.version,
-    )
-
 def _get_packaging_type(ctx, pom_label):
     packaging_type_file = pom_label.relative(":%s" % PACKAGING_TYPE_FILE)
     path = ctx.path(packaging_type_file)
-    result = ctx.execute(["cat", path])
+    result = ctx.execute(["cat", path])  # TODO(cgruber) Convert to read post Bazel 0.29
     if result.return_code != 0:
         fail("Failed to retreive packaging type from %s for artifact %s: %s" % (
             packaging_type_file,
@@ -98,7 +89,7 @@ def _get_pom_sha256(ctx, artifact, urls, file):
     else:
         cache_dir = "%s/%s/%s" % (ctx.os.environ["HOME"], ctx.attr.insecure_cache, _POM_HASH_INFIX)
     cached_file = "%s/%s.sha256" % (cache_dir, file)
-    sha_cache_result = ctx.execute(["cat", cached_file])
+    sha_cache_result = ctx.execute(["cat", cached_file])  # TODO(cgruber) Convert to read post Bazel 0.29
     if sha_cache_result.return_code != 0:
         # This will result in a CA cache miss and an extra download on first use, since the first
         # (non-sha-attributed) download won't store anything in the CA cache.
