@@ -41,21 +41,11 @@ before_install:
   - if [ "osx" == "${TRAVIS_OS_NAME}" ]; then export PLATFORM="darwin" ; else export PLATFORM="${TRAVIS_OS_NAME}" ; fi
   - if [ "osx" == "${TRAVIS_OS_NAME}" ]; then export JAVA_HOME="/Library/Java/JavaVirtualMachines/adoptopenjdk-8.jdk/Contents/Home" ; fi
   - if [ "linux" == "${TRAVIS_OS_NAME}" ]; then export JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64" ; fi
-  - mkdir -p $HOME/bin
-  - mkdir -p ${ANDROID_HOME}
   - ls -FaCl ${JAVA_HOME}/bin
 
 install:
-  - # Download android SDK
-  - (cd ${HOME} && wget https://dl.google.com/android/repository/sdk-tools-${PLATFORM}-${ANDROID_SDK_TOOLS_VERSION}.zip)
-  - (cd ${ANDROID_HOME} && unzip ${HOME}/sdk-tools-${PLATFORM}-${ANDROID_SDK_TOOLS_VERSION}.zip)
-  - yes | ${ANDROID_HOME}/tools/bin/sdkmanager "platform-tools" > /dev/null
-  - yes | ${ANDROID_HOME}/tools/bin/sdkmanager "platforms;android-${ANDROID_PLATFORM_VERSION}" >/dev/null
-  - yes | ${ANDROID_HOME}/tools/bin/sdkmanager "build-tools;${ANDROID_BUILD_TOOLS_VERSION}" >/dev/null
-  - ${ANDROID_HOME}/tools/bin/sdkmanager --list
-  - (cd ${HOME} && wget https://github.com/bazelbuild/bazelisk/releases/download/v${BAZELISK_VERSION}/bazelisk-${PLATFORM}-amd64)
-  - install ${HOME}/bazelisk-${PLATFORM}-amd64 ${HOME}/bin/bazel
-  - chmod a+x ${HOME}/bin/bazel
+  - tools/install_android_studio.sh
+  - tools/install_bazelisk.sh
   - java -version
   - bazel version
 
@@ -67,3 +57,5 @@ script:
 cache:
   directories:
     - $HOME/.cache/bazel_maven_repository
+    - $HOME/bin
+    - $HOME/android-sdk
