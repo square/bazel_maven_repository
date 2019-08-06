@@ -1,3 +1,0 @@
-export BAZEL_INSTALLER=bazel_${BAZEL_VERSION}-linux-x86_64.deb
-export SHA_CMD="sha256sum"
-export INSTALL="sudo dpkg -i"

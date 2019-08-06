@@ -1,54 +1,61 @@
-dist: xenial
-
 language: generic
-
+dist: xenial
+sudo: enabled
 os:
-  - linux
   - osx
+  - linux
 
 env:
   global:
-    - BAZEL_DOWNLOAD_PREFIX=https://github.com/bazelbuild/bazel/releases/download
-
+    - ANDROID_HOME=${HOME}/android-sdk
+    - ANDROID_SDK_TOOLS_VERSION=4333796
+    - ANDROID_BUILD_TOOLS_VERSION="28.0.3"
+    - ANDROID_PLATFORM_VERSION=28
+    - BAZELISK_VERSION="0.0.8"
+    - PATH=${PATH}:${ANDROID_HOME}/tools/bin:${HOME}/bin
   matrix:
-    - BAZEL_VERSION="0.26.1" SEGMENT="."
-    - BAZEL_VERSION="0.26.1" SEGMENT="test/test_workspace"
-    - BAZEL_VERSION="0.27.0" SEGMENT="."
-    - BAZEL_VERSION="0.27.0" SEGMENT="test/test_workspace"
-    - BAZEL_VERSION="0.27.1" SEGMENT="."
-    - BAZEL_VERSION="0.27.1" SEGMENT="test/test_workspace"
-    - BAZEL_VERSION="0.27.2" SEGMENT="."
-    - BAZEL_VERSION="0.27.2" SEGMENT="test/test_workspace"
-    - BAZEL_VERSION="0.28.0" SEGMENT="."
-    - BAZEL_VERSION="0.28.0" SEGMENT="test/test_workspace"
+    - USE_BAZEL_VERSION="0.26.1" SEGMENT="."
+    - USE_BAZEL_VERSION="0.26.1" SEGMENT="test/test_workspace"
+    - USE_BAZEL_VERSION="0.27.0" SEGMENT="."
+    - USE_BAZEL_VERSION="0.27.0" SEGMENT="test/test_workspace"
+    - USE_BAZEL_VERSION="0.27.1" SEGMENT="."
+    - USE_BAZEL_VERSION="0.27.1" SEGMENT="test/test_workspace"
+    - USE_BAZEL_VERSION="0.27.2" SEGMENT="."
+    - USE_BAZEL_VERSION="0.27.2" SEGMENT="test/test_workspace"
+    - USE_BAZEL_VERSION="0.28.0" SEGMENT="."
+    - USE_BAZEL_VERSION="0.28.0" SEGMENT="test/test_workspace"
 
 addons:
   apt:
-    sources:
-      - ubuntu-toolchain-r-test
     packages:
       - wget
-      - pkg-config
-      - zip
-      - g++
-      - zlib1g-dev
-      - unzip
-      - python3
+      - openjdk-8-jdk
   homebrew:
-    packages:
-      - wget
+    taps:
+      - adoptopenjdk/openjdk
+    casks:
+      - adoptopenjdk8
     update: true
 
 before_install:
-  - source tools/.travis.${TRAVIS_OS_NAME}
-  - wget ${BAZEL_DOWNLOAD_PREFIX}/${BAZEL_VERSION}/${BAZEL_INSTALLER}
-  - ${SHA_CMD} -c tools/${BAZEL_INSTALLER}.sha256
+  - if [ "osx" == "${TRAVIS_OS_NAME}" ]; then export PLATFORM="darwin" ; else export PLATFORM="${TRAVIS_OS_NAME}" ; fi
+  - if [ "osx" == "${TRAVIS_OS_NAME}" ]; then export JAVA_HOME="/Library/Java/JavaVirtualMachines/adoptopenjdk-8.jdk/Contents/Home" ; fi
+  - if [ "linux" == "${TRAVIS_OS_NAME}" ]; then export JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64" ; fi
+  - ls -FaCl ${JAVA_HOME}/bin
 
 install:
-  - ${INSTALL} ${BAZEL_INSTALLER}
+  - tools/install_android_studio.sh
+  - tools/install_bazelisk.sh
+  - java -version
   - bazel version
 
 script:
   - # Test each root in the build matrix.
   - cd ${HOME}/build/${TRAVIS_REPO_SLUG}/${SEGMENT}
   - bazel test //...
+
+cache:
+  directories:
+    - $HOME/.cache/bazel_maven_repository
+    - $HOME/bin
+    - $HOME/android-sdk

@@ -1,0 +1,9 @@
+java_test(
+    name = "BlahTest",
+    srcs = ["BlahTest.java"],
+    deps = [
+        "//java/blah",
+        "@maven//com/google/truth",
+        "@maven//junit",
+    ],
+)

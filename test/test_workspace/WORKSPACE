@@ -75,7 +75,7 @@ maven_repository_specification(
         "com.google.code.findbugs:jsr305:3.0.2": {"insecure": True},
         "com.google.errorprone:javac-shaded:9+181-r4173-1": {"insecure": True},
         "com.google.googlejavaformat:google-java-format:1.6": {"insecure": True},
-        "com.google.truth:truth:0.42": {
+        "com.google.truth:truth:1.0": {
             "insecure": True,
             "testonly": True,
             "exclude": ["org.checkerframework:checker-qual"], # for demonstration - don't alter truth in a real project.
@@ -104,8 +104,15 @@ maven_repository_specification(
         "com.google.auto.value:auto-value-annotations:1.6.3": {"insecure": True},
         "com.google.auto.value:auto-value:1.6.3": { "insecure": True, "build_snippet": AUTO_VALUE_BUILD_SNIPPET_WITH_PLUGIN.format(version = "1.6.3"), },
         "org.reflections:reflections:0.9.11": { "insecure": True }, # test leniency related to #62.
-        "org.javassist:javassist:3.21.0-GA": { "insecure": True}, # Only needed if #62 is fixed.
+        "org.javassist:javassist:3.21.0-GA": {"insecure": True}, # Only needed if #62 is fixed.
+        "androidx.arch.core:core-runtime:2.0.1:aar": {"insecure": True},
+        "androidx.annotation:annotation:1.0.2": {"insecure": True},
+        "androidx.arch.core:core-common:2.0.1": {"insecure": True},
     },
+    repository_urls = [
+        "https://repo1.maven.org/maven2",
+        "http://maven.google.com"
+    ],
 
     # Because these apply to all targets within a group, it's specified separately from the artifact list.
     dependency_target_substitutes = {
@@ -115,4 +122,10 @@ maven_repository_specification(
         # "groupId": { "full bazel target": "full alternate target" }
         "com.google.dagger": {"@maven//com/google/dagger:dagger": "@maven//com/google/dagger:dagger_api"},
     },
+)
+
+android_sdk_repository(
+    name = "androidsdk",
+    api_level = 28,
+    build_tools_version = "28.0.3",
 )
