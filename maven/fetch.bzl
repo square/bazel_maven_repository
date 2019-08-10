@@ -9,6 +9,10 @@ load(":poms.bzl", "poms")
 load(":utils.bzl", "strings")
 load(":xml.bzl", "xml")
 
+# Maximum number of parents that this code will search before quiting. This is an insane value, but
+# must be set, as starlark has no while() loop equivalent.
+_MAX_HIERARCHY_DEPTH = 1000
+
 _ARTIFACT_DOWNLOAD_BUILD_FILE_TEMPLATE = """
 package(default_visibility = ["//visibility:public"])
 exports_files([
@@ -30,6 +34,7 @@ echo "${content}" > ${cache_file}
 def _format_exported_files(paths):
     return "".join(["    \"%s\",\n" % path for path in paths])
 
+# Obtain the _pom fetch workspace, and collect the precomupted maven packaging type from a known file therein.
 def _get_packaging_type(ctx, pom_label):
     packaging_type_file = pom_label.relative(":%s" % PACKAGING_TYPE_FILE)
     path = ctx.path(packaging_type_file)
@@ -117,7 +122,6 @@ def _fetch_and_read_pom(ctx, artifact):
         ctx.download(url = urls, output = local_path)
     return ctx.read(local_path)
 
-
 def _fetch_pom_impl(ctx):
     ctx.file(
         _POM_HASH_CACHE_WRITE_SCRIPT,
@@ -130,7 +134,7 @@ def _fetch_pom_impl(ctx):
     paths = [PACKAGING_TYPE_FILE]
     packaging_type = None
     current = artifacts.parse_spec(ctx.attr.artifact)
-    for count in range(10):
+    for count in range(_MAX_HIERARCHY_DEPTH):
         if not bool(current):
             break
         xml_text = _fetch_and_read_pom(ctx, current)
