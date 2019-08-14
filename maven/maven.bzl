@@ -15,9 +15,10 @@
 #   A repository rule intended to be used in populating @maven_repository.
 #
 load(":artifacts.bzl", artifact_utils = "artifacts")
-load(":constants.bzl", "DOWNLOAD_PREFIX")
-load(":fetch.bzl", "fetch")
+load(":globals.bzl", "DOWNLOAD_PREFIX", "fetch_repo")
+load(":fetch.bzl", "fetch_pom", "fetch_artifact")
 load(":jvm.bzl", "raw_jvm_import")
+load(":packaging_type.bzl", "packaging_type")
 load(":poms.bzl", "poms")
 load(":sets.bzl", "sets")
 load(":utils.bzl", "dicts", "paths", "strings")
@@ -48,18 +49,6 @@ artifacts = {
 _LEGACY_BUILD_SUBSTITUTIONS_DEPRECATION_WARNING = """WARNING: Passing the build snippet via build_substitutes is deprecated.
 Please pass the snippet for %s as a configuration property in the artifact dictionary."""
 
-_POM_HASH_CACHE_WRITE_SCRIPT = "bin/pom_hash_cache_write.sh"
-
-#TODO(cgruber) move this into a toolchain (and make a windows equivalent)
-_POM_HASH_CACHE_WRITE_SCRIPT_CONTENT = """#!/bin/sh
-content="$1"
-cache_file="$2"
-mkdir -p $(dirname "${cache_file}")
-echo "${content}" > ${cache_file}
-"""
-
-_POM_HASH_INFIX = "sha256"
-
 _MAVEN_REPO_BUILD_PREFIX = """# Generated bazel build file for maven group {group_id}
 
 load("@{maven_rules_repository}//maven:maven.bzl", "maven_jvm_artifact")
@@ -68,12 +57,13 @@ load("@{maven_rules_repository}//maven:maven.bzl", "maven_jvm_artifact")
 _MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
     name = "{target}",{test_only}
     artifact = "{artifact_coordinates}",
+    type = "{type}",
 {deps})
 """
 
 def _convert_maven_dep(repo_name, artifact):
     group_path = artifact.group_id.replace(".", "/")
-    target = artifact_utils.munge_target(artifact.artifact_id)
+    target = strings.munge(artifact.artifact_id)
     return "@{repo}//{group_path}:{target}".format(repo = repo_name, group_path = group_path, target = target)
 
 def _normalize_target(full_target_spec, current_package, target_substitutions):
@@ -83,89 +73,6 @@ def _normalize_target(full_target_spec, current_package, target_substitutions):
     if local_package == current_package:
         return ":%s" % target  # Trim to a local reference.
     return full_package if paths.filename(full_package) == target else full_target_spec
-
-# Try to obtain the sha256 of the pom file, so it can be resolved from the CA cache (if
-# present).
-#
-# Note, this is strictly insecure, insofar as we are trusting the first download and caching the
-# sha of the file first downloaded.  However, this is not the artifact, and even if hostile pom
-# metadata were introduced, it could only point at dependencies listed in the master list, or else
-# errors will be surfaced, so there is a signal that something has intercepted.  More rigorous
-# usage is possible by setting the pom_sha256 property in the configuration of the artifact.
-def _get_pom_sha256(ctx, artifact, urls, file):
-    ctx.report_progress("Obtaining hash for %s" % file)
-    explicit_sha256 = ctx.attr.pom_sha256_hashes.get(artifact.original_spec)
-    if explicit_sha256:
-        return explicit_sha256
-    if ctx.attr.insecure_cache.startswith("/"):
-        cache_dir = "%s/%s" % (ctx.attr.insecure_cache, _POM_HASH_INFIX)
-    else:
-        cache_dir = "%s/%s/%s" % (ctx.os.environ["HOME"], ctx.attr.insecure_cache, _POM_HASH_INFIX)
-    cached_file = "%s/%s.sha256" % (cache_dir, file)
-    sha_cache_result = ctx.execute(["cat", cached_file])
-    if sha_cache_result.return_code != 0:
-        # This will result in a CA cache miss and an extra download on first use, since the first
-        # (non-sha-attributed) download won't store anything in the CA cache.
-        ctx.report_progress("%s not locally cached, fetching and hashing" % cached_file)
-        pom_result = ctx.download(url = urls, output = file)
-        result = ctx.execute([_POM_HASH_CACHE_WRITE_SCRIPT, pom_result.sha256, cached_file])
-        if result.return_code != 0:
-            fail("Cache write failed with code %s, stderr: %s", (result.return_code, result.stderr))
-        return pom_result.sha256
-    else:
-        return strings.trim(sha_cache_result.stdout)
-
-# Fetch the pom for the artifact.  First see if a cached hash is available for it. If so, use
-# that hash to try a download with the sha, to get a hit on the content addressable cache. If not
-# fetch normally and write that hash to the pom hash cache for next time.
-#
-# This should be in poms.bzl, but we want to keep ctx/network/file operations separate,
-# and Starlark is constrained enough that creating a "downloader" struct is more trouble than
-# it's worth.
-def _fetch_pom(ctx, artifact):
-    urls = ["%s/%s" % (repo, artifact.pom) for repo in ctx.attr.repository_urls]
-    file = "{group_id}/{artifact_id}-{version}.pom".format(
-        group_id = artifact.group_path,
-        artifact_id = artifact.artifact_id,
-        version = artifact.version,
-    )
-    ctx.report_progress("Fetching %s" % file)
-
-    sha256 = _get_pom_sha256(ctx, artifact, urls, file) if ctx.attr.cache_poms_insecurely else None
-    if sha256:
-        ctx.download(url = urls, sha256 = sha256, output = file)
-    else:
-        ctx.download(url = urls, output = file)
-    return ctx.read(file)
-
-# In theory, this logic should live in poms.bzl, but bazel makes it harder to use the strategy pattern (to pass in a
-# downloader) and we want to keep file and network code out of the poms processing code.
-def _get_inheritance_chain(ctx, xml_text):
-    inheritance_chain = [poms.parse(xml_text)]
-    current = inheritance_chain[0]
-    for _ in range(100):  # Can't use recursion, so just iterate
-        raw_parent_artifact = poms.extract_parent(current)
-        if not bool(raw_parent_artifact):
-            break
-        parent_artifact = artifact_utils.annotate(raw_parent_artifact)
-        parent_node = poms.parse(_fetch_pom(ctx, parent_artifact))
-        inheritance_chain += [parent_node]
-        current = parent_node
-    return inheritance_chain
-
-# Take an inheritance chain of xml trees (Fetched by _get_inheritance_chain) and merge them from
-# the top (the end of the list) to the bottom (the beginning of the list)
-def _get_effective_pom(inheritance_chain):
-    merged = inheritance_chain.pop()
-    for next in reversed(inheritance_chain):
-        merged = poms.merge_parent(parent = merged, child = next)
-    return merged
-
-# Extract the artifact's dependencies (accounting for pom inheritance), excluding those artifacts explicitly excluded.
-def _get_dependencies_from_pom_files(ctx, artifact):
-    inheritance_chain = _get_inheritance_chain(ctx, _fetch_pom(ctx, artifact))
-    project = _get_effective_pom(inheritance_chain)
-    return _get_dependencies_from_project(ctx, ctx.attr.exclusions.get(artifact.original_spec, []), project)
 
 def _get_dependencies_from_project(ctx, exclusions, project):
     exclusions = sets.copy_of(exclusions)
@@ -189,11 +96,6 @@ def _generate_maven_repository_impl(ctx):
     # Generate the root WORKSPACE file
     repository_root_path = ctx.path(".")
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
-    ctx.file(
-        _POM_HASH_CACHE_WRITE_SCRIPT,
-        content = _POM_HASH_CACHE_WRITE_SCRIPT_CONTENT,
-        executable = True,
-    )
 
     # Generate the per-group_id BUILD.bazel files.
     build_snippets = ctx.attr.build_snippets
@@ -222,7 +124,9 @@ def _generate_maven_repository_impl(ctx):
             if snippet:
                 target_definitions.append(snippet)
             else:
-                maven_deps = _get_dependencies_from_pom_files(ctx, artifact)
+                exclusions = ctx.attr.exclusions.get(artifact.original_spec, [])
+                pom = poms.get_project_metadata(ctx, artifact)
+                maven_deps = _get_dependencies_from_project(ctx, exclusions, pom)
                 maven_deps = [x for x in maven_deps if _should_include_dependency(x)]
                 found_artifacts = {}
                 bazel_deps = []
@@ -250,6 +154,7 @@ def _generate_maven_repository_impl(ctx):
                         target = artifact.third_party_target_name,
                         deps = _deps_string(normalized_deps),
                         artifact_coordinates = artifact.original_spec,
+                        type = poms.extract_packaging(pom),
                         test_only = test_only_subst,
                     ),
                 )
@@ -260,16 +165,13 @@ def _generate_maven_repository_impl(ctx):
 _generate_maven_repository = repository_rule(
     implementation = _generate_maven_repository_impl,
     attrs = {
-        "grouped_artifacts": attr.string_list_dict(mandatory = True),
-        "repository_urls": attr.string_list(mandatory = True),
+        "grouped_artifacts": attr.string_list_dict(),
         "maven_rules_repository": attr.string(mandatory = False, default = "maven_repository_rules"),
-        "dependency_target_substitutes": attr.string_list_dict(mandatory = True),
-        "build_snippets": attr.string_dict(mandatory = True),
-        "cache_poms_insecurely": attr.bool(mandatory = True),
-        "insecure_cache": attr.string(mandatory = False),
-        "pom_sha256_hashes": attr.string_dict(mandatory = True),
-        "test_only_artifacts": attr.string_list(mandatory = True),
-        "exclusions": attr.string_list_dict(mandatory = True),
+        "dependency_target_substitutes": attr.string_list_dict(),
+        "build_snippets": attr.string_dict(),
+        "test_only_artifacts": attr.string_list(),
+        "exclusions": attr.string_list_dict(),
+        "poms": attr.label_list(),
     },
 )
 
@@ -349,7 +251,6 @@ def _handle_legacy_specifications(artifacts, insecure_artifacts, build_snippets)
         print(_LEGACY_BUILD_SUBSTITUTIONS_DEPRECATION_WARNING % versioned_key)
     return artifacts
 
-
 ####################
 # PUBLIC FUNCTIONS #
 ####################
@@ -362,6 +263,9 @@ def maven_jvm_artifact(
         # The name of this target, typically the same as the artifact_id of the artifact.
         name = None,
 
+        # the packaging type (suffix) of the file
+        type = None,
+
         # Visibility of this target (default: ["//visibility:public"])
         visibility = ["//visibility:public"],
 
@@ -371,14 +275,14 @@ def maven_jvm_artifact(
         # Extra arguments passed through to the raw import rules that underly this macro.
         **kwargs):
     artifact_struct = artifact_utils.annotate(artifact_utils.parse_spec(artifact))
-    maven_target = "@%s//%s:%s" % (artifact_struct.maven_target_name, DOWNLOAD_PREFIX, artifact_struct.path)
-    target_name = name if name else artifact_struct.third_party_target_name
-    if artifact_struct.packaging == "jar":
-        raw_jvm_import(name = target_name, deps = deps, visibility = visibility, jar = maven_target, **kwargs)
-    elif artifact_struct.packaging == "aar":
-        native.aar_import(name = target_name, deps = deps, visibility = visibility, aar = maven_target, **kwargs)
+    artifact_type = packaging_type.value_of(type) if bool(type) else packaging_type.value_of(artifact_struct.type)
+    maven_target = fetch_repo.artifact_target(artifact_struct, artifact_type.suffix)
+    if artifact_type.suffix == "jar":
+        raw_jvm_import(name = name, deps = deps, visibility = visibility, jar = maven_target, **kwargs)
+    elif artifact_type.suffix == "aar":
+        native.aar_import(name = name, deps = deps, visibility = visibility, aar = maven_target, **kwargs)
     else:
-        fail("Packaging %s not supported by maven_jvm_artifact." % artifact_struct.packaging)
+        fail("%s is not a supported artifact type. Currently only jar/aar are supported." % artifact_struct.type.name)
 
 # Description:
 #   Generates the bazel repo and download logic for each artifact (and repository URL prefixes) in the WORKSPACE
@@ -425,7 +329,6 @@ def maven_repository_specification(
         # addressable cache.  By default they are not cached locally unless pom_sha256 is supplied
         # for that artifact.
         insecure_cache = ".cache/bazel_maven_repository/hashes"):
-
     _handle_legacy_specifications(artifacts, insecure_artifacts, build_substitutes)
 
     if len(repository_urls) == 0:
@@ -441,28 +344,44 @@ def maven_repository_specification(
     pom_sha256_hashes = {}
     test_only_artifacts = []
     exclusions = {}
+    artifact_structs = {}
+    poms = []
+    # First pass, since some thing need to be globally available to each (like explicit pom shas)
     for artifact_spec, properties in artifacts.items():
-        artifact = artifact_utils.annotate(artifact_utils.parse_spec(artifact_spec))
+        artifact_structs[artifact_spec] = artifact_utils.annotate(artifact_utils.parse_spec(artifact_spec))
+        pom_hash = properties.get(artifact_config_properties.POM_SHA256)
+        if bool(pom_hash):
+            pom_sha256_hashes[artifact_spec] = pom_hash
 
+    for artifact_spec, properties in artifacts.items():
+        artifact = artifact_structs[artifact_spec]
         # Track group_ids in order to build per-group BUILD.bazel files.
         grouped_artifacts[artifact.group_id] = (
             grouped_artifacts.get(artifact.group_id, default = []) + [artifact.original_spec]
         )
-        sha256 = properties.get(artifact_config_properties.SHA256)
-        urls = ["%s/%s" % (repo, artifact.path) for repo in repository_urls]
-        fetch.artifact(
-            name = artifact.maven_target_name,
-            urls = urls,
-            local_path = artifact.path,
-            sha256 = sha256,
+        pom_sha256_hash = properties.get(artifact_config_properties.POM_SHA256)
+        fetch_pom(
+            name = fetch_repo.pom_repo_name(artifact),
+            artifact = artifact_spec,
+            repository_urls = repository_urls,
+            cache_poms_insecurely = cache_poms_insecurely,
+            insecure_cache = insecure_cache,
+            pom_hashes = pom_sha256_hashes,
         )
+        poms.append(fetch_repo.pom_target(artifact))
+
+        sha256 = properties.get(artifact_config_properties.SHA256)
+        fetch_artifact(
+            name = fetch_repo.artifact_repo_name(artifact),
+            artifact = artifact_spec,
+            repository_urls = repository_urls,
+            sha256 = sha256,
+            pom = fetch_repo.pom_target(artifact),
+        )
+
         snippet = properties.get(artifact_config_properties.BUILD_SNIPPET)
         if bool(snippet):
             build_snippets["%s:%s" % (artifact.group_id, artifact.artifact_id)] = snippet
-
-        pom_sha256_hash = properties.get(artifact_config_properties.POM_SHA256)
-        if bool(pom_sha256_hash):
-            pom_sha256_hashes[artifact_spec] = pom_sha256_hash
 
         if bool(properties.get(artifact_config_properties.TEST_ONLY)):
             test_only_artifacts += [artifact_spec]
@@ -476,16 +395,12 @@ def maven_repository_specification(
     _generate_maven_repository(
         name = name,
         grouped_artifacts = grouped_artifacts,
-        repository_urls = repository_urls,
         dependency_target_substitutes = dependency_target_substitutes_rewritten,
         build_snippets = build_snippets,
-        cache_poms_insecurely = cache_poms_insecurely,
-        insecure_cache = insecure_cache,
-        pom_sha256_hashes = pom_sha256_hashes,
         test_only_artifacts = test_only_artifacts,
         exclusions = exclusions,
+        poms = poms,
     )
-
 
 ####################
 # Test-only Struct #
@@ -493,9 +408,5 @@ def maven_repository_specification(
 for_testing = struct(
     unsupported_keys = _unsupported_keys,
     handle_legacy_specifications = _handle_legacy_specifications,
-    fetch_pom = _fetch_pom,
-    get_pom_sha256 = _get_pom_sha256,
-    get_inheritance_chain = _get_inheritance_chain,
-    get_effective_pom = _get_effective_pom,
     get_dependencies_from_project = _get_dependencies_from_project,
 )

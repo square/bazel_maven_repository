@@ -1,7 +1,9 @@
 #
 # Description:
-#   Utilities for extracting information from pom files.
+#   Utilities for extracting information from pom xml trees.
 #
+load(":globals.bzl", "DOWNLOAD_PREFIX", "fetch_repo")
+load(":packaging_type.bzl", "packaging_type")
 load(":utils.bzl", "strings")
 load(":xml.bzl", "xml")
 
@@ -91,7 +93,7 @@ def _dependency(
 # and artifactId so it will blow up if used anywhere but in the final merge step.
 _DEPENDENCY_DEFAULT = struct(
     version = None,
-    type = "jar",
+    type = packaging_type.DEFAULT.name,
     optional = False,
     scope = "compile",
     classifier = None,
@@ -171,6 +173,27 @@ def _get_processed_dependencies(project_node):
         result.append(dep)
     return result
 
+# Extracts artifact_id for the project metadata given.
+# The parameter should be the project node of a parsed xml document tree, returned by poms.parse(xml_text). Any
+# metadata merging (inherited metadata) should be done before calling this, to avoid missing out inherited packaging.
+def _extract_artifact_id(node):
+    for child_node in node.children:
+        if child_node.label == "artifactId":
+            return child_node.content
+    return None
+
+# Extracts packaging specification for the project metadata given.
+# The parameter should be the project node of a parsed xml document tree, returned by poms.parse(xml_text). Any
+# metadata merging (inherited metadata) should be done before calling this, to avoid missing out inherited packaging.
+def _extract_packaging(project):
+    if project.label != "project":
+        fail("Attempted to extract a packaging tag from a %s node, instead of a <project> node." % project.label)
+    for node in project.children:
+        if node.label == labels.PACKAGING:
+            if bool(node.content):
+                return node.content
+    return packaging_type.DEFAULT.name
+
 def _process_parent(dep_node):
     group_id = None
     artifact_id = None
@@ -186,7 +209,7 @@ def _process_parent(dep_node):
         group_id = group_id,
         artifact_id = artifact_id,
         version = version,
-        packaging = "pom",  # Parent POMs must be pure metadata artifacts (only a .pom, no .jar/.aar, etc.)
+        type = "pom",  # Parent POMs must be pure metadata artifacts (only a .pom, no .jar/.aar, etc.)
         original_spec = "%s:%s:%s:pom" % (group_id, artifact_id, version),
         classifier = None,
     )
@@ -194,12 +217,16 @@ def _process_parent(dep_node):
 # Extracts parent specification for the supplied pom file.
 # The parameter should be the project node of a parsed xml document tree, returned by poms.parse(xml_text)
 def _extract_parent(project):
+    if project.label != "project":
+        fail("Attempted to extract a parent tag from a %s node, instead of a <project> node." % project.label)
     for node in project.children:
         if node.label == labels.PARENT:
             return _process_parent(node)
     return None
 
 def _extract_properties(project):
+    if project.label != "project":
+        fail("Attempted to extract properties from a %s node, instead of a <project> node." % project.label)
     properties_nodes = []
     for node in project.children:
         if node.label == labels.PROPERTIES:
@@ -218,18 +245,18 @@ def _extract_properties(project):
 def _format_dependency(dep):
     result = "%s:%s:%s" % (dep.group_id, dep.artifact_id, dep.version)
     if bool(dep.classifier):
-        type = dep.type if bool(dep.type) else "jar"
+        type = dep.type if bool(dep.type) else packaging_type.DEFAULT.name
         result = "%s:%s" % (result, dep.type)
-    elif bool(dep.type) and not dep.type == "jar":
+    elif bool(dep.type) and not dep.type == packaging_type.DEFAULT.name:
         result = "%s:%s" % (result, dep.type)
     return result
 
 def _parse(xml_text):
     root = xml.parse(xml_text)
-    for node in root.children:
-        if node.label == labels.PROJECT:
-            return node
-    fail("No <project> tag found in supplied xml: %s" % xml_text)
+    project = xml.find_first(root, "project")
+    if not bool(project):
+        fail("No <project> tag found in supplied xml: %s" % xml_text)
+    return project
 
 # A pom-specific node-merge algorith,
 def _merge_content_last_wins(a, b):
@@ -274,10 +301,6 @@ def _merge_properties_section(parent_node, child_node):
     )
     return xml.new_node(label = labels.PROPERTIES, children = children)
 
-for_testing = struct(
-    get_variable = _get_variable,
-    substitute_variable = _substitute_variable_if_present,
-)
 
 # Description:
 #   Merges the dependency section of the pom.  This makes an assumption that deps sections won't have both the main
@@ -343,7 +366,9 @@ def _merge_parent(parent, child):
     # merge packaging with jar special cased.
     child_packaging_node = xml.find_first(child, labels.PACKAGING)
     merged.children.append(
-        child_packaging_node if bool(child_packaging_node) else xml.new_node(label = labels.PACKAGING, content = "jar"),
+        child_packaging_node if bool(child_packaging_node) else (
+            xml.new_node(label = labels.PACKAGING, content = packaging_type.DEFAULT.name)
+        ),
     )
 
     # merge properties
@@ -364,9 +389,59 @@ def _merge_parent(parent, child):
     ]))
     return merged
 
+# A function to read the pom from the place it was downloaded to.  This should be a lambda in any reasonable language.
+def _read_pom(ctx, path):
+    result = ctx.execute(["cat", path])
+    if result.return_code != 0:
+        fail("Failed to read pom file from %s: %s" % (path, result.return_code))
+    return result.stdout
+
+def _trace_parse(ctx, xml_text):
+    ctx.repo
+# Builds a chain of nodes representing pom xml data in a hierarchical inheritance relationship which
+# can be collapsed or wrapped.
+def _get_inheritance_chain(ctx, artifact):
+    inheritance_chain = []
+    current = artifact
+    for _ in range(100):  # Can't use recursion, so just iterate
+        if not bool(current):
+            ctx.report_progress("Merging poms for %s" % artifact.original_spec)
+            return inheritance_chain
+        path = ctx.path(fetch_repo.pom_target_relative_to(current, fetch_repo.pom_repo_name(artifact)))
+        ctx.report_progress("Reading pom for %s" % current.original_spec)
+        xml_text = _read_pom(ctx, path)
+        ctx.report_progress("Parsing pom for %s" % current.original_spec)
+        current_node = _parse(xml_text)
+        inheritance_chain += [current_node]
+        current = _extract_parent(current_node)
+    fail("Iterations exceeded. %s has more than 100 super-poms." % artifact.original_spec)
+
+# Take an inheritance chain of xml trees (Fetched by _get_inheritance_chain) and merge them from
+# the top (the end of the list) to the bottom (the beginning of the list)
+def _merge_inheritance_chain(inheritance_chain):
+    merged = inheritance_chain.pop()
+    for next in reversed(inheritance_chain):
+        merged = _merge_parent(parent = merged, child = next)
+    return merged
+
+# Get the merged metadata for the pom.xml and its parents.
+def _get_project_metadata(ctx, artifact):
+    # The two steps are extracted for testability.
+    return _merge_inheritance_chain(_get_inheritance_chain(ctx, artifact))
+
+for_testing = struct(
+    get_variable = _get_variable,
+    substitute_variable = _substitute_variable_if_present,
+    merge_inheritance_chain = _merge_inheritance_chain,
+    get_inheritance_chain = _get_inheritance_chain,
+)
+
+# Exposes the namespace for the poms functions.
 poms = struct(
-    # Returns an xml element tree of the supplied pom text.
+    # Returns an xml element tree of the supplied pom text corresponding to the project
     parse = _parse,
+
+    extract_artifact_id = _extract_artifact_id,
 
     # Returns a list of structs containing each dependency declared pom xml tree.
     extract_dependencies = _get_processed_dependencies,
@@ -380,9 +455,17 @@ poms = struct(
     # Returns a dictionary containing the properties of the pom xml tree.
     extract_properties = _extract_properties,
 
+    # Returns a string representing the packaging type of the pom (jar, aar, etc.)
+    extract_packaging = _extract_packaging,
+
     # Returns a string representation of the supplied dependency
     format_dependency = _format_dependency,
 
     # Merges a parent pom xml tree with a child xml tree.
     merge_parent = _merge_parent,
+
+    # Get the effective (inheritance-merged) pom node tree, against which other functions in this struct can be
+    # performed.  This function assumes that a fetch.pom_rule has been setup for the artifact in question, that it has
+    # been passed to the rules invoking this function, and will fail with a missing workspace if that is not the case.
+    get_project_metadata = _get_project_metadata,
 )

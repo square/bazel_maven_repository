@@ -5,11 +5,15 @@ load(
     "PARENT_POM",
     "SCOPED_DEP_POM",
     "SIMPLE_DEP_POM",
+    "SIMPLE_PACKAGING_AAR_POM",
+    "SIMPLE_PACKAGING_BUNDLE_POM",
     "SIMPLE_PROPERTIES_POM",
     "SYSTEM_PATH_POM",
 )
 load(":testing.bzl", "asserts", "test_suite")
+load("//maven:artifacts.bzl", "artifacts")
 load("//maven:poms.bzl", "for_testing", "poms")
+load("//maven:xml.bzl", "xml")
 
 def simple_pom_fragment_process(env):
     deps = poms.extract_dependencies(poms.parse(SIMPLE_DEP_POM))
@@ -62,6 +66,12 @@ def complex_pom_test(env):
     asserts.true(env, managed_dependencies)
     asserts.equals(env, 1, len(managed_dependencies), "managed_dependencies")
 
+def extract_packaging_test(env):
+    asserts.equals(env, "pom", poms.extract_packaging(poms.parse(PARENT_POM)))
+    asserts.equals(env, "jar", poms.extract_packaging(poms.parse(COMPLEX_POM)))
+    asserts.equals(env, "aar", poms.extract_packaging(poms.parse(SIMPLE_PACKAGING_AAR_POM)))
+    asserts.equals(env, "bundle", poms.extract_packaging(poms.parse(SIMPLE_PACKAGING_BUNDLE_POM)))
+
 def extract_parent_test(env):
     pom = poms.parse(COMPLEX_POM)
     parent_artifact = poms.extract_parent(pom)
@@ -71,7 +81,7 @@ def extract_parent_test(env):
     asserts.equals(env, "grandparent", parent_artifact.artifact_id)
     pom = poms.parse(GRANDPARENT_POM)
     parent_artifact = poms.extract_parent(pom)
-    asserts.false(env, parent_artifact)
+    asserts.false(env, bool(parent_artifact))
 
 def extract_properties_simple_test(env):
     properties = poms.extract_properties(poms.parse(SIMPLE_PROPERTIES_POM))
@@ -127,17 +137,51 @@ def boolean_options_whitespace_test(env):
     asserts.false(env, dependencies[0].optional, "optional should be false for foo")
     asserts.true(env, dependencies[1].optional, "optional should be true for bar")
 
+def merge_inheritance_chain_test(env):
+    inheritance_chain = [poms.parse(COMPLEX_POM), poms.parse(PARENT_POM), poms.parse(GRANDPARENT_POM)]
+
+    merged = for_testing.merge_inheritance_chain(inheritance_chain)
+
+    asserts.equals(env, "test.group", xml.find_first(merged, "groupId").content, "groupId")
+    asserts.equals(env, "child", xml.find_first(merged, "artifactId").content, "artifactId")
+    asserts.equals(env, "1.0", xml.find_first(merged, "version").content, "version")
+    asserts.equals(env, "jar", xml.find_first(merged, "packaging").content, "packaging")
+
+# Set up fakes.
+def _fake_execute(args):
+    download_map = {
+        "test/group/child/1.0/child-1.0.pom": struct(return_code = 0, stdout = COMPLEX_POM),
+        "test/group/parent/1.0/parent-1.0.pom": struct(return_code = 0, stdout = PARENT_POM),
+        "test/grandparent/1.0/grandparent-1.0.pom": struct(return_code = 0, stdout = GRANDPARENT_POM),
+    }
+    return download_map.get(args[1], struct(return_code = 5, stderr = "ERROR!!!!!"))
+
+def _pass_through_path(label):
+    return label.name
+
+def _noop_report(string):
+    pass
+
+def get_parent_chain_test(env):
+    fake_ctx = struct(path = _pass_through_path, execute = _fake_execute, report_progress = _noop_report)
+    chain = for_testing.get_inheritance_chain(fake_ctx, artifacts.parse_spec("test.group:child:1.0"))
+    actual_ids = [poms.extract_artifact_id(x) for x in chain]
+    asserts.equals(env, ["child", "parent", "grandparent"], actual_ids)
+
 TESTS = [
     simple_pom_fragment_process,
     simple_pom_fragment_process_scope,
     simple_pom_fragment_process_system_path,
     complex_pom_test,
     extract_parent_test,
+    extract_packaging_test,
     extract_properties_simple_test,
     extract_properties_complex_pom_test,
     get_variable_test,
     substitute_variable_test,
     boolean_options_whitespace_test,
+    merge_inheritance_chain_test,
+    get_parent_chain_test,
 ]
 
 # Roll-up function.
