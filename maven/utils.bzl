@@ -13,8 +13,12 @@ def _trim(string, characters = "\n "):
 def _contains(string, substring):
     return not (string.find(substring) == -1)
 
-def _munge(artifact_id):
-    return artifact_id.replace("-", "_").replace(".", "_")
+def _munge(string, *characters_to_munge):
+    if len(characters_to_munge) == 0:
+        fail("Illegal argument: characters_to_munge must not be empty")
+    for char in characters_to_munge:
+        string = string.replace(char, "_")
+    return string
 
 strings = struct(
     contains = _contains,
@@ -27,14 +31,14 @@ def _filename(string):
     return file if bool(sep) else string
 
 paths = struct(
-    filename = _filename
+    filename = _filename,
 )
 
 def _max_int(a, b):
     return a if a > b else b
 
 ints = struct(
-    max = _max_int
+    max = _max_int,
 )
 
 # Encodes a dict(string->dict(string->string)) into a dict(string->list(string)) with the string encoded so it can

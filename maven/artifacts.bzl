@@ -35,7 +35,6 @@ def _parse_spec(artifact_spec):
         version = version,
     )
 
-
 # Builds an annotated struct from a more basic artifact struct, with standard paths, names, and other values
 # derived from the basic artifact spec elements.
 def _annotate_artifact(artifact):
@@ -67,7 +66,6 @@ def _annotate_artifact(artifact):
     ) if bool(artifact.version) else None
 
     annotated_artifact = struct(
-        third_party_target_name = strings.munge(artifact.artifact_id),
         path = path,
         group_path = group_path,
         pom = pom,

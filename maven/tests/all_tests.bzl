@@ -11,8 +11,8 @@ load(":xml_test.bzl", xml = "suite")
 
 load("//maven:sets.bzl", "sets")
 
-
-SUITES = [dicts, fetch, globals, paths, maven, poms, poms_merging, set_tests, strings, xml]
+# Order by more fundamental/generic, so we can see those errors earlier.
+SUITES = [dicts, set_tests, strings, globals, xml, fetch, paths, poms, poms_merging, maven]
 
 def _validate(ctx, suites):
     # Function objects don't have good properties, so we hack it from the string representation.
