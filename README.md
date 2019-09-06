@@ -24,6 +24,8 @@ Release: `1.1`
     - [Pom file sha verification](#pom-file-sha-verification)
     - [Substitution of build targets](#substitution-of-build-targets)
     - [Classifiers](#classifiers)
+    - [Testonly](#testonly)
+    - [Dependency Exclusions](#dependency-exclusions)
   - [API](#api-reference)
     - [maven_repository_specification](#maven_repository_specification)
     - [maven_jvm_artifact](#maven_jvm_artifact)
