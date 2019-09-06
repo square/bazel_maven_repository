@@ -49,7 +49,10 @@ maven_repository_specification(
     # If supplied, this will be the alternate location for insecure sha hashes.
     #
     # This can be an absolute or a path relative to ${HOME}
-    insecure_cache=".cache/bazel_maven_repository", # This is the default
+    insecure_cache = ".cache/bazel_maven_repository", # This is the default
+
+    # Enable the creation of older-style mangling where foo-bar becomes foo_bar (for migration)
+    legacy_artifact_id_munge = True,
 
     # The artifact spec list.
     artifacts = {
@@ -120,7 +123,7 @@ maven_repository_specification(
         # annotation processor) we need to rewrite the internal dependencies inside the com/google/dagger package
         # to reflect this.
         # "groupId": { "full bazel target": "full alternate target" }
-        "com.google.dagger": {"@maven//com/google/dagger:dagger": "@maven//com/google/dagger:dagger_api"},
+        "com.google.dagger": {"@maven//com/google/dagger:dagger": "@maven//com/google/dagger:dagger-api"},
     },
 )
 

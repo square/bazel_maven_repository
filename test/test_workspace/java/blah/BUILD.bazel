@@ -2,9 +2,10 @@ package(default_visibility = ["//:__subpackages__"])
 
 android_library(
     name = "blah",
-    manifest = "AndroidManifest.xml",
     srcs = ["Blah.java"],
+    manifest = "AndroidManifest.xml",
     deps = [
-        "@maven//androidx/arch/core:core_runtime",
-    ]
+        "@maven//androidx/arch/core:core_runtime",  # Use the legacy mangling alias.
+        "@maven//javax/annotation:jsr250-api",
+    ],
 )

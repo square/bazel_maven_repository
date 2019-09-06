@@ -15,7 +15,7 @@ def _group_path(artifact):
 def _artifact_repo_name(artifact):
     # Extra empty strings are there to force "__" in between sections (to disambiguate
     # "foo:bar-parent:1.0" from "foo.bar:parent:1.0" in fetch repos.
-    artifact_id_munged = strings.munge(artifact.artifact_id)
+    artifact_id_munged = strings.munge(artifact.artifact_id, ".", "-")
     munged_classifier_if_present = [strings.munge(artifact.classifier.split)] if artifact.classifier else []
     group_elements = artifact.group_id.split(".")
     return "_".join([_REPO_PREFIX, ""] + group_elements + ["", artifact_id_munged] + munged_classifier_if_present)

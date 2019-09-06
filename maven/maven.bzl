@@ -16,7 +16,7 @@
 #
 load(":artifacts.bzl", artifact_utils = "artifacts")
 load(":globals.bzl", "DOWNLOAD_PREFIX", "fetch_repo")
-load(":fetch.bzl", "fetch_pom", "fetch_artifact")
+load(":fetch.bzl", "fetch_artifact", "fetch_pom")
 load(":jvm.bzl", "raw_jvm_import")
 load(":packaging_type.bzl", "packaging_type")
 load(":poms.bzl", "poms")
@@ -61,9 +61,16 @@ _MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
 {deps})
 """
 
+_LEGACY_NAME_MANGLING_ALIAS = """alias(
+    name = "{name}",
+    actual = ":{actual}",
+    visibility = ["//visibility:public"],
+)
+"""
+
 def _convert_maven_dep(repo_name, artifact):
     group_path = artifact.group_id.replace(".", "/")
-    target = strings.munge(artifact.artifact_id)
+    target = strings.munge(artifact.artifact_id, ".")
     return "@{repo}//{group_path}:{target}".format(repo = repo_name, group_path = group_path, target = target)
 
 def _normalize_target(full_target_spec, current_package, target_substitutions):
@@ -148,16 +155,25 @@ def _generate_maven_repository_impl(ctx):
                 test_only_subst = (
                     "\n    testonly = True," if sets.contains(test_only_artifacts, spec) else ""
                 )
-
                 target_definitions.append(
                     _MAVEN_REPO_TARGET_TEMPLATE.format(
-                        target = artifact.third_party_target_name,
+                        target = strings.munge(artifact.artifact_id, "."),
                         deps = _deps_string(normalized_deps),
                         artifact_coordinates = artifact.original_spec,
                         type = poms.extract_packaging(pom),
                         test_only = test_only_subst,
                     ),
                 )
+
+                # Optionally add a legacy munge target
+                # TODO(cgruber) Rip this out after a few versions.
+                if ctx.attr.legacy_artifact_id_munge:
+                    legacy = strings.munge(artifact.artifact_id, ".", "-")
+                    new = strings.munge(artifact.artifact_id, ".")
+                    if (legacy != new):
+                        target_definitions.append(
+                            _LEGACY_NAME_MANGLING_ALIAS.format(name = legacy, actual = new),
+                        )
         file = "%s/BUILD.bazel" % group_path
         content = "\n".join([prefix] + target_definitions)
         ctx.file(file, content)
@@ -171,6 +187,7 @@ _generate_maven_repository = repository_rule(
         "build_snippets": attr.string_dict(),
         "test_only_artifacts": attr.string_list(),
         "exclusions": attr.string_list_dict(),
+        "legacy_artifact_id_munge": attr.bool(mandatory = False, default = False),
         "poms": attr.label_list(),
     },
 )
@@ -321,6 +338,10 @@ def maven_repository_specification(
         # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
         repository_urls = ["https://repo1.maven.org/maven2"],
 
+        # If True, then generate a legacy target with the older artifact-id munging, to allow migration to the newer
+        # target naming. (Specifically, do we turn "-" into "_" in the target naming).
+        legacy_artifact_id_munge = False,
+
         # If True, then cache poms based on the sha256 of the first downloaded occurrance.
         cache_poms_insecurely = False,
 
@@ -346,6 +367,7 @@ def maven_repository_specification(
     exclusions = {}
     artifact_structs = {}
     poms = []
+
     # First pass, since some thing need to be globally available to each (like explicit pom shas)
     for artifact_spec, properties in artifacts.items():
         artifact_structs[artifact_spec] = artifact_utils.annotate(artifact_utils.parse_spec(artifact_spec))
@@ -355,6 +377,7 @@ def maven_repository_specification(
 
     for artifact_spec, properties in artifacts.items():
         artifact = artifact_structs[artifact_spec]
+
         # Track group_ids in order to build per-group BUILD.bazel files.
         grouped_artifacts[artifact.group_id] = (
             grouped_artifacts.get(artifact.group_id, default = []) + [artifact.original_spec]
@@ -399,6 +422,7 @@ def maven_repository_specification(
         build_snippets = build_snippets,
         test_only_artifacts = test_only_artifacts,
         exclusions = exclusions,
+        legacy_artifact_id_munge = legacy_artifact_id_munge,
         poms = poms,
     )
 
