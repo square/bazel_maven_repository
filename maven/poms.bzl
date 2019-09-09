@@ -86,7 +86,7 @@ def _dependency(
         scope = scope,
         classifier = classifier,
         system_path = system_path,
-        coordinate = "%s:%s" % (group_id, artifact_id),
+        coordinates = "%s:%s" % (group_id, artifact_id),
     )
 
 # A set of property defaults for dependencies, to be merged at the last minute.  Omits the groupId
@@ -163,11 +163,11 @@ def _get_processed_dependencies(project_node):
     result = []
     dependency_management = {}
     for dep in _extract_dependency_management(project_node):
-        dependency_management[dep.coordinate] = dep
+        dependency_management[dep.coordinates] = dep
     dependencies = _extract_dependencies(project_node)
     properties = _extract_properties(project_node)
     for dep in dependencies:
-        dep = _merge_dependency(dependency_management.get(dep.coordinate, None), dep)
+        dep = _merge_dependency(dependency_management.get(dep.coordinates, None), dep)
         dep = _apply_property(dep, properties)
         dep = _merge_dependency(_DEPENDENCY_DEFAULT, dep)  # fill in any needed default values.
         result.append(dep)

@@ -64,11 +64,11 @@ def get_dependencies_from_project_test(env):
     project = poms_testing.merge_inheritance_chain(poms_testing.get_inheritance_chain(fake_ctx, artifact))
 
     # confirm junit is present.  This is just a precondition assertion, testing the baseline deps mechanism
-    dependencies = [d.coordinate for d in for_testing.get_dependencies_from_project(fake_ctx, [], project)]
+    dependencies = [d.coordinates for d in for_testing.get_dependencies_from_project(fake_ctx, [], project)]
     asserts.true(env, sets.contains(sets.copy_of(dependencies), "junit:junit"), "Should contain junit:junit")
 
     # confirm junit is excluded
-    dependencies = [d.coordinate for d in for_testing.get_dependencies_from_project(fake_ctx, ["junit:junit"], project)]
+    dependencies = [d.coordinates for d in for_testing.get_dependencies_from_project(fake_ctx, ["junit:junit"], project)]
     asserts.false(env, sets.contains(sets.copy_of(dependencies), "junit:junit"), "Should NOT contain junit:junit")
 
 TESTS = [

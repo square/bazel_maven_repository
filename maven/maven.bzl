@@ -56,7 +56,7 @@ load("@{maven_rules_repository}//maven:maven.bzl", "maven_jvm_artifact")
 
 _MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
     name = "{target}",{test_only}
-    artifact = "{artifact_coordinates}",
+    artifact = "{artifact_spec}",
     type = "{type}",
 {deps})
 """
@@ -83,7 +83,7 @@ def _normalize_target(full_target_spec, current_package, target_substitutions):
 
 def _get_dependencies_from_project(ctx, exclusions, project):
     exclusions = sets.copy_of(exclusions)
-    maven_deps = [d for d in poms.extract_dependencies(project) if not sets.contains(exclusions, d.coordinate)]
+    maven_deps = [d for d in poms.extract_dependencies(project) if not sets.contains(exclusions, d.coordinates)]
     return maven_deps
 
 def _deps_string(bazel_deps):
@@ -126,11 +126,10 @@ def _generate_maven_repository_impl(ctx):
         group_path = group_id.replace(".", "/")
         for spec in specs:
             artifact = artifact_utils.parse_spec(spec)
-            coordinates = "%s:%s" % (artifact.group_id, artifact.artifact_id)
-            if processed_artifacts.get(coordinates):
-                fail("Already processed %s!!!!!" % coordinates)
-            sets.add(processed_artifacts, coordinates)
-            snippet = build_snippets.get(coordinates)
+            if processed_artifacts.get(artifact.coordinates):
+                fail("Already processed %s!!!!!" % artifact.coordinates)
+            sets.add(processed_artifacts, artifact.coordinates)
+            snippet = build_snippets.get(artifact.coordinates)
             if snippet:
                 target_definitions.append(snippet)
             else:
@@ -141,7 +140,7 @@ def _generate_maven_repository_impl(ctx):
                 found_artifacts = {}
                 bazel_deps = []
                 for dep in maven_deps:
-                    found_artifacts[dep.coordinate] = dep
+                    found_artifacts[dep.coordinates] = dep
                     bazel_deps += [_convert_maven_dep(ctx.attr.name, dep)]
                 normalized_deps = [_normalize_target(x, group_path, package_target_substitutes) for x in bazel_deps]
                 unregistered = sets.difference(known_artifacts, sets.copy_of(found_artifacts))
@@ -149,7 +148,7 @@ def _generate_maven_repository_impl(ctx):
                     unregistered_deps = [
                         poms.format_dependency(x)
                         for x in maven_deps
-                        if sets.contains(unregistered, x.coordinate)
+                        if sets.contains(unregistered, x.coordinates)
                     ]
                     fail("Some dependencies of %s were not pinned in the artifacts list:\n%s" % (
                         spec,
@@ -162,7 +161,7 @@ def _generate_maven_repository_impl(ctx):
                     _MAVEN_REPO_TARGET_TEMPLATE.format(
                         target = strings.munge(artifact.artifact_id, "."),
                         deps = _deps_string(normalized_deps),
-                        artifact_coordinates = artifact.original_spec,
+                        artifact_spec = artifact.original_spec,
                         type = poms.extract_packaging(pom),
                         test_only = test_only_subst,
                     ),
@@ -261,7 +260,7 @@ def _handle_legacy_specifications(artifacts, insecure_artifacts, build_snippets)
     versionless_mapping = {}
     for key in artifacts:
         artifact = artifact_utils.parse_spec(key)
-        versionless_mapping["%s:%s" % (artifact.group_id, artifact.artifact_id)] = key
+        versionless_mapping[artifact.coordinates] = key
     for key, snippet in build_snippets.items():
         versioned_key = versionless_mapping.get(key)
         if not bool(versioned_key):
@@ -407,7 +406,7 @@ def maven_repository_specification(
 
         snippet = properties.get(artifact_config_properties.BUILD_SNIPPET)
         if bool(snippet):
-            build_snippets["%s:%s" % (artifact.group_id, artifact.artifact_id)] = snippet
+            build_snippets[artifact.coordinates] = snippet
 
         if bool(properties.get(artifact_config_properties.TEST_ONLY)):
             test_only_artifacts += [artifact_spec]

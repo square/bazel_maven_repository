@@ -88,7 +88,7 @@ def _get_pom_sha256(ctx, artifact, urls, file):
         cache_dir = "%s/%s/%s" % (ctx.os.environ["HOME"], ctx.attr.insecure_cache, _POM_HASH_INFIX)
     cached_file = ctx.path("%s/%s.sha256" % (cache_dir, file))
 
-    if not ctx.path(cached_file).exists:
+    if not cached_file.exists:
         # This will result in a CA cache miss and an extra download on first use, since the first
         # (non-sha-attributed) download won't store anything in the CA cache.
         ctx.report_progress("%s not locally cached, fetching and hashing" % cached_file)
