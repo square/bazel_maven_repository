@@ -14,16 +14,8 @@ env:
     - BAZELISK_VERSION="0.0.8"
     - PATH=${PATH}:${ANDROID_HOME}/tools/bin:${HOME}/bin
   matrix:
-    - USE_BAZEL_VERSION="0.26.1" SEGMENT="."
-    - USE_BAZEL_VERSION="0.26.1" SEGMENT="test/test_workspace"
-    - USE_BAZEL_VERSION="0.27.0" SEGMENT="."
-    - USE_BAZEL_VERSION="0.27.0" SEGMENT="test/test_workspace"
-    - USE_BAZEL_VERSION="0.27.1" SEGMENT="."
-    - USE_BAZEL_VERSION="0.27.1" SEGMENT="test/test_workspace"
-    - USE_BAZEL_VERSION="0.27.2" SEGMENT="."
-    - USE_BAZEL_VERSION="0.27.2" SEGMENT="test/test_workspace"
-    - USE_BAZEL_VERSION="0.28.0" SEGMENT="."
-    - USE_BAZEL_VERSION="0.28.0" SEGMENT="test/test_workspace"
+    - USE_BAZEL_VERSION="0.29.0" SEGMENT="."
+    - USE_BAZEL_VERSION="0.29.0" SEGMENT="test/test_workspace"
 
 addons:
   apt:

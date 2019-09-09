@@ -114,7 +114,7 @@ def inferred_values_in_dependencies_test(env):
     dependencies = poms.extract_dependencies(poms.parse(MERGED_EXPECTED_POM))
     indexed_dependencies = {}
     for dep in dependencies:
-        indexed_dependencies[dep.coordinate] = dep
+        indexed_dependencies[dep.coordinates] = dep
     asserts.equals(env, 5, len(dependencies), "number of dependencies")
     asserts.true(env, indexed_dependencies.get("com.google.code.findbugs:jsr305", None), "has jsr305")
     asserts.equals(

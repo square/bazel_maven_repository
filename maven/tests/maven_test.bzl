@@ -35,13 +35,13 @@ def handle_legacy_build_snippet_handling(env):
     )
 
 # Set up fakes.
-def _fake_read_for_get_parent_chain(args):
+def _fake_read_for_get_parent_chain(path):
     download_map = {
-        "test/group/child/1.0/child-1.0.pom": struct(return_code = 0, stdout = COMPLEX_POM),
-        "test/group/parent/1.0/parent-1.0.pom": struct(return_code = 0, stdout = PARENT_POM),
-        "test/grandparent/1.0/grandparent-1.0.pom": struct(return_code = 0, stdout = GRANDPARENT_POM),
+        "test/group/child/1.0/child-1.0.pom": COMPLEX_POM,
+        "test/group/parent/1.0/parent-1.0.pom": PARENT_POM,
+        "test/grandparent/1.0/grandparent-1.0.pom": GRANDPARENT_POM,
     }
-    return download_map.get(args[1], struct(return_code = 5, stderr = "ERROR!!!!!"))
+    return download_map.get(path, None)
 
 def _noop_download(url, output):
     pass
@@ -55,7 +55,7 @@ def _pass_through_path(label):
 def get_dependencies_from_project_test(env):
     fake_ctx = struct(
         download = _noop_download,
-        execute = _fake_read_for_get_parent_chain,
+        read = _fake_read_for_get_parent_chain,
         attr = struct(repository_urls = [_FAKE_URL_PREFIX], cache_poms_insecurely = False),
         report_progress = _noop_report_progress,
         path = _pass_through_path,
@@ -64,11 +64,11 @@ def get_dependencies_from_project_test(env):
     project = poms_testing.merge_inheritance_chain(poms_testing.get_inheritance_chain(fake_ctx, artifact))
 
     # confirm junit is present.  This is just a precondition assertion, testing the baseline deps mechanism
-    dependencies = [d.coordinate for d in for_testing.get_dependencies_from_project(fake_ctx, [], project)]
+    dependencies = [d.coordinates for d in for_testing.get_dependencies_from_project(fake_ctx, [], project)]
     asserts.true(env, sets.contains(sets.copy_of(dependencies), "junit:junit"), "Should contain junit:junit")
 
     # confirm junit is excluded
-    dependencies = [d.coordinate for d in for_testing.get_dependencies_from_project(fake_ctx, ["junit:junit"], project)]
+    dependencies = [d.coordinates for d in for_testing.get_dependencies_from_project(fake_ctx, ["junit:junit"], project)]
     asserts.false(env, sets.contains(sets.copy_of(dependencies), "junit:junit"), "Should NOT contain junit:junit")
 
 TESTS = [

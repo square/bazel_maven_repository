@@ -38,14 +38,7 @@ def _format_exported_files(paths):
 def _get_packaging_type(ctx, pom_label):
     packaging_type_file = pom_label.relative(":%s" % PACKAGING_TYPE_FILE)
     path = ctx.path(packaging_type_file)
-    result = ctx.execute(["cat", path])  # TODO(cgruber) Convert to read post Bazel 0.29
-    if result.return_code != 0:
-        fail("Failed to retreive packaging type from %s for artifact %s: %s" % (
-            packaging_type_file,
-            ctx.attr.artifact,
-            result.stderr,
-        ))
-    return strings.trim(result.stdout)
+    return strings.trim(ctx.read(path))
 
 # Downloads an artifact and exports it into the build language.
 def _fetch_artifact_impl(ctx):
@@ -93,9 +86,9 @@ def _get_pom_sha256(ctx, artifact, urls, file):
         cache_dir = "%s/%s" % (ctx.attr.insecure_cache, _POM_HASH_INFIX)
     else:
         cache_dir = "%s/%s/%s" % (ctx.os.environ["HOME"], ctx.attr.insecure_cache, _POM_HASH_INFIX)
-    cached_file = "%s/%s.sha256" % (cache_dir, file)
-    sha_cache_result = ctx.execute(["cat", cached_file])  # TODO(cgruber) Convert to read post Bazel 0.29
-    if sha_cache_result.return_code != 0:
+    cached_file = ctx.path("%s/%s.sha256" % (cache_dir, file))
+
+    if not cached_file.exists:
         # This will result in a CA cache miss and an extra download on first use, since the first
         # (non-sha-attributed) download won't store anything in the CA cache.
         ctx.report_progress("%s not locally cached, fetching and hashing" % cached_file)
@@ -105,7 +98,7 @@ def _get_pom_sha256(ctx, artifact, urls, file):
             fail("Cache write failed with code %s, stderr: %s", (result.return_code, result.stderr))
         return pom_result.sha256
     else:
-        return strings.trim(sha_cache_result.stdout)
+        return strings.trim(ctx.read(cached_file))
 
 # Fetch the pom for the artifact.  First see if a cached hash is available for it. If so, use
 # that hash to try a download with the sha, to get a hit on the content addressable cache. If not

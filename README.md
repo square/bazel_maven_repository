@@ -462,10 +462,11 @@ effort testing)?
 | Bazel 0.22.x | ![Yes] | ![No] |
 | Bazel 0.23.x | ![Yes] | ![No] |
 | Bazel 0.24.x | ![Yes] | ![No] |
-| Bazel 0.25.x | ![Yes] | ![Yes] |
-| Bazel 0.26.x | ![Yes] | ![Yes] |
-| Bazel 0.27.x | ![Yes] | ![Yes] |
-| Bazel 0.28.0 | ![Yes] | ![Yes] |
+| Bazel 0.25.x | ![Yes] | ![No] |
+| Bazel 0.26.x | ![Yes] | ![No] |
+| Bazel 0.27.x | ![Yes] | ![No] |
+| Bazel 0.28.0 | ![Yes] | ![No] |
+| Bazel 0.29.0 | ![Yes] | ![Yes] |
 
 [Yes]: https://img.shields.io/static/v1.svg?label=&message=Yes&color=green
 [No]: https://img.shields.io/static/v1.svg?label=&message=No&color=red

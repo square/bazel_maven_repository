@@ -86,7 +86,7 @@ def _dependency(
         scope = scope,
         classifier = classifier,
         system_path = system_path,
-        coordinate = "%s:%s" % (group_id, artifact_id),
+        coordinates = "%s:%s" % (group_id, artifact_id),
     )
 
 # A set of property defaults for dependencies, to be merged at the last minute.  Omits the groupId
@@ -163,11 +163,11 @@ def _get_processed_dependencies(project_node):
     result = []
     dependency_management = {}
     for dep in _extract_dependency_management(project_node):
-        dependency_management[dep.coordinate] = dep
+        dependency_management[dep.coordinates] = dep
     dependencies = _extract_dependencies(project_node)
     properties = _extract_properties(project_node)
     for dep in dependencies:
-        dep = _merge_dependency(dependency_management.get(dep.coordinate, None), dep)
+        dep = _merge_dependency(dependency_management.get(dep.coordinates, None), dep)
         dep = _apply_property(dep, properties)
         dep = _merge_dependency(_DEPENDENCY_DEFAULT, dep)  # fill in any needed default values.
         result.append(dep)
@@ -389,15 +389,7 @@ def _merge_parent(parent, child):
     ]))
     return merged
 
-# A function to read the pom from the place it was downloaded to.  This should be a lambda in any reasonable language.
-def _read_pom(ctx, path):
-    result = ctx.execute(["cat", path])
-    if result.return_code != 0:
-        fail("Failed to read pom file from %s: %s" % (path, result.return_code))
-    return result.stdout
 
-def _trace_parse(ctx, xml_text):
-    ctx.repo
 # Builds a chain of nodes representing pom xml data in a hierarchical inheritance relationship which
 # can be collapsed or wrapped.
 def _get_inheritance_chain(ctx, artifact):
@@ -409,7 +401,7 @@ def _get_inheritance_chain(ctx, artifact):
             return inheritance_chain
         path = ctx.path(fetch_repo.pom_target_relative_to(current, fetch_repo.pom_repo_name(artifact)))
         ctx.report_progress("Reading pom for %s" % current.original_spec)
-        xml_text = _read_pom(ctx, path)
+        xml_text = ctx.read(path)
         ctx.report_progress("Parsing pom for %s" % current.original_spec)
         current_node = _parse(xml_text)
         inheritance_chain += [current_node]

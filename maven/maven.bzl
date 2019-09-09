@@ -56,7 +56,7 @@ load("@{maven_rules_repository}//maven:maven.bzl", "maven_jvm_artifact")
 
 _MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
     name = "{target}",{test_only}
-    artifact = "{artifact_coordinates}",
+    artifact = "{artifact_spec}",
     type = "{type}",
 {deps})
 """
@@ -83,7 +83,7 @@ def _normalize_target(full_target_spec, current_package, target_substitutions):
 
 def _get_dependencies_from_project(ctx, exclusions, project):
     exclusions = sets.copy_of(exclusions)
-    maven_deps = [d for d in poms.extract_dependencies(project) if not sets.contains(exclusions, d.coordinate)]
+    maven_deps = [d for d in poms.extract_dependencies(project) if not sets.contains(exclusions, d.coordinates)]
     return maven_deps
 
 def _deps_string(bazel_deps):
@@ -108,15 +108,16 @@ def _generate_maven_repository_impl(ctx):
     build_snippets = ctx.attr.build_snippets
     target_substitutes = dicts.decode_nested(ctx.attr.dependency_target_substitutes)
     test_only_artifacts = sets.copy_of(ctx.attr.test_only_artifacts)
+    known_artifacts = sets.new()
     processed_artifacts = sets.new()
-    for specs in ctx.attr.grouped_artifacts.values():
-        artifact_structs = [artifact_utils.parse_spec(s) for s in specs]
-        sets.add_all(processed_artifacts, ["%s:%s" % (a.group_id, a.artifact_id) for a in artifact_structs])
+    for grouped_specs in ctx.attr.grouped_artifacts.values():
+        for spec in grouped_specs:
+            sets.add(known_artifacts, artifact_utils.parse_spec(spec).coordinates)
     build_files = {}
     for group_id, specs_list in ctx.attr.grouped_artifacts.items():
         package_target_substitutes = target_substitutes.get(group_id, {})
-        ctx.report_progress("Generating build details for artifacts in %s" % group_id)
         specs = sets.copy_of(specs_list)
+        ctx.report_progress("Generating build details for %s artifacts in %s" % (len(specs), group_id))
         prefix = _MAVEN_REPO_BUILD_PREFIX.format(
             group_id = group_id,
             maven_rules_repository = ctx.attr.maven_rules_repository,
@@ -124,10 +125,11 @@ def _generate_maven_repository_impl(ctx):
         target_definitions = []
         group_path = group_id.replace(".", "/")
         for spec in specs:
-            artifact = artifact_utils.annotate(artifact_utils.parse_spec(spec))
-            coordinates = "%s:%s" % (artifact.group_id, artifact.artifact_id)
-            sets.add(processed_artifacts, coordinates)
-            snippet = build_snippets.get(coordinates)
+            artifact = artifact_utils.parse_spec(spec)
+            if processed_artifacts.get(artifact.coordinates):
+                fail("Already processed %s!!!!!" % artifact.coordinates)
+            sets.add(processed_artifacts, artifact.coordinates)
+            snippet = build_snippets.get(artifact.coordinates)
             if snippet:
                 target_definitions.append(snippet)
             else:
@@ -138,15 +140,15 @@ def _generate_maven_repository_impl(ctx):
                 found_artifacts = {}
                 bazel_deps = []
                 for dep in maven_deps:
-                    found_artifacts[dep.coordinate] = dep
+                    found_artifacts[dep.coordinates] = dep
                     bazel_deps += [_convert_maven_dep(ctx.attr.name, dep)]
                 normalized_deps = [_normalize_target(x, group_path, package_target_substitutes) for x in bazel_deps]
-                unregistered = sets.difference(processed_artifacts, sets.copy_of(found_artifacts))
+                unregistered = sets.difference(known_artifacts, sets.copy_of(found_artifacts))
                 if bool(unregistered):
                     unregistered_deps = [
                         poms.format_dependency(x)
                         for x in maven_deps
-                        if sets.contains(unregistered, x.coordinate)
+                        if sets.contains(unregistered, x.coordinates)
                     ]
                     fail("Some dependencies of %s were not pinned in the artifacts list:\n%s" % (
                         spec,
@@ -159,7 +161,7 @@ def _generate_maven_repository_impl(ctx):
                     _MAVEN_REPO_TARGET_TEMPLATE.format(
                         target = strings.munge(artifact.artifact_id, "."),
                         deps = _deps_string(normalized_deps),
-                        artifact_coordinates = artifact.original_spec,
+                        artifact_spec = artifact.original_spec,
                         type = poms.extract_packaging(pom),
                         test_only = test_only_subst,
                     ),
@@ -258,7 +260,7 @@ def _handle_legacy_specifications(artifacts, insecure_artifacts, build_snippets)
     versionless_mapping = {}
     for key in artifacts:
         artifact = artifact_utils.parse_spec(key)
-        versionless_mapping["%s:%s" % (artifact.group_id, artifact.artifact_id)] = key
+        versionless_mapping[artifact.coordinates] = key
     for key, snippet in build_snippets.items():
         versioned_key = versionless_mapping.get(key)
         if not bool(versioned_key):
@@ -291,7 +293,7 @@ def maven_jvm_artifact(
 
         # Extra arguments passed through to the raw import rules that underly this macro.
         **kwargs):
-    artifact_struct = artifact_utils.annotate(artifact_utils.parse_spec(artifact))
+    artifact_struct = artifact_utils.parse_spec(artifact)
     artifact_type = packaging_type.value_of(type) if bool(type) else packaging_type.value_of(artifact_struct.type)
     maven_target = fetch_repo.artifact_target(artifact_struct, artifact_type.suffix)
     if artifact_type.suffix == "jar":
@@ -370,7 +372,7 @@ def maven_repository_specification(
 
     # First pass, since some thing need to be globally available to each (like explicit pom shas)
     for artifact_spec, properties in artifacts.items():
-        artifact_structs[artifact_spec] = artifact_utils.annotate(artifact_utils.parse_spec(artifact_spec))
+        artifact_structs[artifact_spec] = artifact_utils.parse_spec(artifact_spec)
         pom_hash = properties.get(artifact_config_properties.POM_SHA256)
         if bool(pom_hash):
             pom_sha256_hashes[artifact_spec] = pom_hash
@@ -404,7 +406,7 @@ def maven_repository_specification(
 
         snippet = properties.get(artifact_config_properties.BUILD_SNIPPET)
         if bool(snippet):
-            build_snippets["%s:%s" % (artifact.group_id, artifact.artifact_id)] = snippet
+            build_snippets[artifact.coordinates] = snippet
 
         if bool(properties.get(artifact_config_properties.TEST_ONLY)):
             test_only_artifacts += [artifact_spec]
