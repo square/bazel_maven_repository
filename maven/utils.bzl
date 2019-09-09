@@ -13,12 +13,12 @@ def _trim(string, characters = "\n "):
 def _contains(string, substring):
     return not (string.find(substring) == -1)
 
-def _munge(string, *characters_to_munge):
+def _munge(to_mangle, *characters_to_munge):
     if len(characters_to_munge) == 0:
-        fail("Illegal argument: characters_to_munge must not be empty")
+        fail("Illegal argument: no mangling characters given when mangling %s" % to_mangle)
     for char in characters_to_munge:
-        string = string.replace(char, "_")
-    return string
+        to_mangle = to_mangle.replace(char, "_")
+    return to_mangle
 
 strings = struct(
     contains = _contains,

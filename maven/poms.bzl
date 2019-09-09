@@ -389,15 +389,7 @@ def _merge_parent(parent, child):
     ]))
     return merged
 
-# A function to read the pom from the place it was downloaded to.  This should be a lambda in any reasonable language.
-def _read_pom(ctx, path):
-    result = ctx.execute(["cat", path])
-    if result.return_code != 0:
-        fail("Failed to read pom file from %s: %s" % (path, result.return_code))
-    return result.stdout
 
-def _trace_parse(ctx, xml_text):
-    ctx.repo
 # Builds a chain of nodes representing pom xml data in a hierarchical inheritance relationship which
 # can be collapsed or wrapped.
 def _get_inheritance_chain(ctx, artifact):
@@ -409,7 +401,7 @@ def _get_inheritance_chain(ctx, artifact):
             return inheritance_chain
         path = ctx.path(fetch_repo.pom_target_relative_to(current, fetch_repo.pom_repo_name(artifact)))
         ctx.report_progress("Reading pom for %s" % current.original_spec)
-        xml_text = _read_pom(ctx, path)
+        xml_text = ctx.read(path)
         ctx.report_progress("Parsing pom for %s" % current.original_spec)
         current_node = _parse(xml_text)
         inheritance_chain += [current_node]

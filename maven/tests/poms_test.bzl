@@ -148,13 +148,13 @@ def merge_inheritance_chain_test(env):
     asserts.equals(env, "jar", xml.find_first(merged, "packaging").content, "packaging")
 
 # Set up fakes.
-def _fake_execute(args):
+def _fake_read(path):
     download_map = {
-        "test/group/child/1.0/child-1.0.pom": struct(return_code = 0, stdout = COMPLEX_POM),
-        "test/group/parent/1.0/parent-1.0.pom": struct(return_code = 0, stdout = PARENT_POM),
-        "test/grandparent/1.0/grandparent-1.0.pom": struct(return_code = 0, stdout = GRANDPARENT_POM),
+        "test/group/child/1.0/child-1.0.pom": COMPLEX_POM,
+        "test/group/parent/1.0/parent-1.0.pom": PARENT_POM,
+        "test/grandparent/1.0/grandparent-1.0.pom": GRANDPARENT_POM,
     }
-    return download_map.get(args[1], struct(return_code = 5, stderr = "ERROR!!!!!"))
+    return download_map.get(path, None)
 
 def _pass_through_path(label):
     return label.name
@@ -163,7 +163,7 @@ def _noop_report(string):
     pass
 
 def get_parent_chain_test(env):
-    fake_ctx = struct(path = _pass_through_path, execute = _fake_execute, report_progress = _noop_report)
+    fake_ctx = struct(path = _pass_through_path, read = _fake_read, report_progress = _noop_report)
     chain = for_testing.get_inheritance_chain(fake_ctx, artifacts.parse_spec("test.group:child:1.0"))
     actual_ids = [poms.extract_artifact_id(x) for x in chain]
     asserts.equals(env, ["child", "parent", "grandparent"], actual_ids)

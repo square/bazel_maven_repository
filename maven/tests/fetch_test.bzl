@@ -34,32 +34,29 @@ def fetch_and_read_pom_test(env):
         report_progress = _noop_report_progress,
     )
     project = poms.parse(
-        for_testing.fetch_and_read_pom(fake_ctx, artifacts.annotate(artifacts.parse_spec("test.group:child:1.0"))),
+        for_testing.fetch_and_read_pom(fake_ctx, artifacts.parse_spec("test.group:child:1.0")),
     )
     asserts.equals(env, "project", project.label)
 
-def _fake_execute_for_cache_hit_test(args):
-    if args[0] == "cat":
-        if args[1] == "/tmp/blah/sha256/test/group/child-1.0.pom.sha256":
-            return struct(
-                return_code = 0,
-                stdout = "\n1234567812345678123456781234567812345678123456781234567812345678 \n",
-            )
-    fail("Unexpected Execution %s" % args)
+def _fake_read_for_cache_hit_test(path):
+    return  "\n1234567812345678123456781234567812345678123456781234567812345678 \n"
+
+def _fake_path(string):
+    return struct(exists = True)
 
 def get_pom_sha256_cache_hit_test(env):
     fake_ctx = struct(
         download = _noop_download,
-        read = _fake_execute_for_cache_hit_test,
+        read = _fake_read_for_cache_hit_test,
         attr = struct(
             cache_poms_insecurely = True,
             insecure_cache = "/tmp/blah",
             pom_hashes = {},
         ),
         report_progress = _noop_report_progress,
-        execute = _fake_execute_for_cache_hit_test,
+        path = _fake_path,
     )
-    artifact = artifacts.annotate(artifacts.parse_spec("test.group:child:1.0"))
+    artifact = artifacts.parse_spec("test.group:child:1.0")
     urls = ["fake://somerepo/test/group/child/1.0/child-1.0.pom"]
     file = "test/group/child-1.0.pom"
     sha256 = for_testing.get_pom_sha256(fake_ctx, artifact, urls, file)
@@ -69,10 +66,7 @@ def _fake_download_for_cache_miss_test(url, output):
     return struct(sha256 = "1234567812345678123456781234567812345678123456781234567812345678")
 
 def _fake_execute_for_cache_miss_test(args):
-    if args[0] == "cat":
-        if args[1] == "/tmp/blah/sha256/test/group/child-1.0.pom.sha256":
-            return struct(return_code = 1)
-    elif args[0] == "bin/pom_hash_cache_write.sh":
+    if args[0] == "bin/pom_hash_cache_write.sh":
         if (args[1] == "1234567812345678123456781234567812345678123456781234567812345678" and
             args[2] == "/tmp/blah/sha256/test/group/child-1.0.pom.sha256"):
             return struct(return_code = 0)
@@ -81,7 +75,7 @@ def _fake_execute_for_cache_miss_test(args):
 def get_pom_sha256_cache_miss_test(env):
     fake_ctx = struct(
         download = _fake_download_for_cache_miss_test,
-        read = _fake_read_for_fetch_and_read_pom_test,
+        read = _fake_read_for_cache_hit_test,
         attr = struct(
             cache_poms_insecurely = True,
             insecure_cache = "/tmp/blah",
@@ -89,8 +83,9 @@ def get_pom_sha256_cache_miss_test(env):
         ),
         report_progress = _noop_report_progress,
         execute = _fake_execute_for_cache_miss_test,
+        path = _fake_path,
     )
-    artifact = artifacts.annotate(artifacts.parse_spec("test.group:child:1.0"))
+    artifact = artifacts.parse_spec("test.group:child:1.0")
     urls = ["fake://somerepo/test/group/child/1.0/child-1.0.pom"]
     file = "test/group/child-1.0.pom"
     sha256 = for_testing.get_pom_sha256(fake_ctx, artifact, urls, file)
@@ -106,7 +101,7 @@ def get_pom_sha256_predefined_test(env):
         ),
         report_progress = _noop_report_progress,
     )
-    artifact = artifacts.annotate(artifacts.parse_spec("test.group:child:1.0"))
+    artifact = artifacts.parse_spec("test.group:child:1.0")
     sha256 = for_testing.get_pom_sha256(fake_ctx, artifact, None, None)
     asserts.equals(env, "1234567812345678123456781234567812345678123456781234567812345678", sha256)
 
