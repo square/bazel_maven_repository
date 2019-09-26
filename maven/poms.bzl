@@ -59,9 +59,7 @@ def _process_dependency(dep_node):
     # TODO: Respect use_jetifier from `maven.bzl`
     coordinate = "%s:%s" % (group_id, artifact_id)
     if coordinate in JETIFIER_ARTIFACT_MAPPING:
-        new_coordinate_split = JETIFIER_ARTIFACT_MAPPING[coordinate].split(':')
-        group_id = new_coordinate_split[0]
-        artifact_id = new_coordinate_split[1]
+        group_id, artifact_id = JETIFIER_ARTIFACT_MAPPING[coordinate].split(':')
         version = "unspecified"
 
     return _dependency(

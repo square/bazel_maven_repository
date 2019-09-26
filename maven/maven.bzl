@@ -235,6 +235,19 @@ _generate_maven_repository = repository_rule(
     },
 )
 
+JETIFIER_EXCLUDED_ARTIFACTS = [
+    "javax.annotation:jsr250-api",
+    "com.google.code.findbugs:jsr305",
+    "com.google.errorprone:javac-shaded",
+    "com.google.googlejavaformat:google-java-format",
+    "com.squareup:javapoet",
+    "com.google.dagger:dagger-compiler",
+    "com.google.dagger:dagger-producers",
+    "com.google.dagger:dagger-spi",
+    "com.google.dagger:dagger",
+    "javax.inject:javax.inject",
+]
+
 # Implementation of the maven_jvm_artifact rule.
 def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], use_jetifier = False, **kwargs):
     artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
@@ -243,18 +256,10 @@ def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], use_jetifier
     target_name = name if name else artifact.third_party_target_name
     coordinate = "%s:%s" % (artifact.group_id, artifact.artifact_id)
 
-    should_jetify = use_jetifier and coordinate not in [
-      "javax.annotation:jsr250-api",
-      "com.google.code.findbugs:jsr305",
-      "com.google.errorprone:javac-shaded",
-      "com.google.googlejavaformat:google-java-format",
-      "com.squareup:javapoet",
-      "com.google.dagger:dagger-compiler",
-      "com.google.dagger:dagger-producers",
-      "com.google.dagger:dagger-spi",
-      "com.google.dagger:dagger",
-      "javax.inject:javax.inject",
-    ] and artifact.group_id != "org.bouncycastle" and not artifact.group_id.startswith("androidx")
+    should_jetify = (use_jetifier and
+        coordinate not in JETIFIER_EXCLUDED_ARTIFACTS and
+        artifact.group_id != "org.bouncycastle" and
+        not artifact.group_id.startswith("androidx"))
 
     if should_jetify:
         target = target_name + "_jetified"
