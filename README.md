@@ -472,21 +472,17 @@ find the jar contents for annotation processors such as `Dagger 2` or `AutoValue
 Which version of *bazel_maven_repository* can you use with which version of Bazel (best
 effort testing)?
 
-| Bazel Maven Repo Version | 1.0 | HEAD |
-| ---- | ---- | ---- |
-| Bazel < 0.19.0 | ![Unknown] | ![No] |
-| Bazel 0.19.x | ![Yes] | ![No] |
-| Bazel 0.19.x | ![Yes] | ![No] |
-| Bazel 0.20.x | ![Yes] | ![No] |
-| Bazel 0.21.x | ![Yes] | ![No] |
-| Bazel 0.22.x | ![Yes] | ![No] |
-| Bazel 0.23.x | ![Yes] | ![No] |
-| Bazel 0.24.x | ![Yes] | ![No] |
-| Bazel 0.25.x | ![Yes] | ![No] |
-| Bazel 0.26.x | ![Yes] | ![No] |
-| Bazel 0.27.x | ![Yes] | ![No] |
-| Bazel 0.28.0 | ![Yes] | ![No] |
-| Bazel 0.29.0 | ![Yes] | ![Yes] |
+| Bazel Maven Repo Version | 1.0 | 1.0.1rc1 | HEAD |
+| -------------- | ---------- | ---------- | ---------- |
+| Bazel < 0.24   | ![Unknown] | ![No]      | ![No]      |
+| Bazel 0.24.x   | ![Yes]     | ![No]      | ![No]      |
+| Bazel 0.25.x   | ![Yes]     | ![Yes]     | ![No]      |
+| Bazel 0.26.x   | ![Yes]     | ![Yes]     | ![No]      |
+| Bazel 0.27.x   | ![Yes]     | ![Yes]     | ![No]      |
+| Bazel 0.28.0   | ![Yes]     | ![Yes]     | ![No]      |
+| Bazel 0.29.0   | ![Yes]     | ![Yes]     | ![Yes]     |
+| Bazel 0.29.1   | ![Yes]     | ![Yes]     | ![Yes]     |
+| Bazel 1.0.0rc3 | ![Yes]     | ![Yes]     | ![Unknown] |
 
 [Yes]: https://img.shields.io/static/v1.svg?label=&message=Yes&color=green
 [No]: https://img.shields.io/static/v1.svg?label=&message=No&color=red
