@@ -479,7 +479,7 @@ effort testing)?
 | Bazel 0.25.x   | ![Yes]     | ![Yes]     | ![No]      |
 | Bazel 0.26.x   | ![Yes]     | ![Yes]     | ![No]      |
 | Bazel 0.27.x   | ![Yes]     | ![Yes]     | ![No]      |
-| Bazel 0.28.0   | ![Yes]     | ![Yes]     | ![No]      |
+| Bazel 0.28.x   | ![Yes]     | ![Yes]     | ![No]      |
 | Bazel 0.29.0   | ![Yes]     | ![Yes]     | ![Yes]     |
 | Bazel 0.29.1   | ![Yes]     | ![Yes]     | ![Yes]     |
 | Bazel 1.0.0rc3 | ![Yes]     | ![Yes]     | ![Unknown] |
