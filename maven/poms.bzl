@@ -264,7 +264,7 @@ def _merge_leaf_elements(parent_list, child_list):
             merged[index_of_property] = child_list[i]
         else:
             merged.append(child_list[i])
-            index[child_list[i].label] = len(merged)
+            index[child_list[i].label] = len(merged) - 1
     return merged
 
 def _children_if_exists(node):
