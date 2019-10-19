@@ -115,6 +115,7 @@ def _generate_maven_repository_impl(ctx):
         for spec in grouped_specs:
             sets.add(known_artifacts, artifact_utils.parse_spec(spec).coordinates)
     build_files = {}
+    missing_artifacts = []
     for group_id, specs_list in ctx.attr.grouped_artifacts.items():
         package_target_substitutes = target_substitutes.get(group_id, {})
         specs = sets.copy_of(specs_list)
@@ -146,15 +147,11 @@ def _generate_maven_repository_impl(ctx):
                 normalized_deps = [_normalize_target(x, group_path, package_target_substitutes) for x in bazel_deps]
                 unregistered = sets.difference(known_artifacts, sets.copy_of(found_artifacts))
                 if bool(unregistered):
-                    unregistered_deps = [
+                    missing_artifacts += [
                         poms.format_dependency(x)
                         for x in maven_deps
                         if sets.contains(unregistered, x.coordinates)
                     ]
-                    fail("Some dependencies of %s were not pinned in the artifacts list:\n%s" % (
-                        spec,
-                        list(unregistered_deps),
-                    ))
                 test_only_subst = (
                     "\n    testonly = True," if sets.contains(test_only_artifacts, spec) else ""
                 )
@@ -181,6 +178,13 @@ def _generate_maven_repository_impl(ctx):
         file = "%s/BUILD.bazel" % group_path
         content = "\n".join([prefix] + target_definitions)
         ctx.file(file, content)
+    if bool(missing_artifacts):
+        missing_deps_text = "Some dependencies of %s were not pinned in the artifacts list\n" % spec
+        missing_deps_text = "Please add the following to your maven_repository_specification:\n"
+        missing_deps_text += ("[\n" +
+            "".join(["    \"%s\": { \"insecure\": True },\n" % a for a in missing_artifacts]) +
+            "]\n")
+        fail(missing_deps_text)
 
 _generate_maven_repository = repository_rule(
     implementation = _generate_maven_repository_impl,
