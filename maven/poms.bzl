@@ -403,8 +403,7 @@ def _get_inheritance_chain(ctx, artifact):
     inheritance_chain = []
     current = artifact
     for _ in range(100):  # Can't use recursion, so just iterate
-        if not bool(current):
-            ctx.report_progress("Merging poms for %s" % artifact.original_spec)
+        if current == None:
             return inheritance_chain
         path = ctx.path(fetch_repo.pom_target_relative_to(current, fetch_repo.pom_repo_name(artifact)))
         ctx.report_progress("Reading pom for %s" % current.original_spec)
