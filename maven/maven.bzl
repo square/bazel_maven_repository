@@ -440,7 +440,6 @@ def maven_repository_specification(
 
         sha256 = properties.get(artifact_config_properties.SHA256)
 
-        # TODO: Make this a more generalized exclusion list (and move
         should_jetify = (use_jetifier and
             artifact.coordinates not in JETIFIER_EXCLUDED_ARTIFACTS and
             artifact.group_id != "org.bouncycastle" and
