@@ -16,6 +16,10 @@ env:
   matrix:
     - USE_BAZEL_VERSION="0.29.0" SEGMENT="."
     - USE_BAZEL_VERSION="0.29.0" SEGMENT="test/test_workspace"
+    - USE_BAZEL_VERSION="0.29.1" SEGMENT="."
+    - USE_BAZEL_VERSION="0.29.1" SEGMENT="test/test_workspace"
+    - USE_BAZEL_VERSION="1.0.0" SEGMENT="."
+    - USE_BAZEL_VERSION="1.0.0" SEGMENT="test/test_workspace"
 
 addons:
   apt:

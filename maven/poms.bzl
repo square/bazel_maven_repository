@@ -6,6 +6,7 @@ load(":globals.bzl", "DOWNLOAD_PREFIX", "fetch_repo")
 load(":packaging_type.bzl", "packaging_type")
 load(":utils.bzl", "strings")
 load(":xml.bzl", "xml")
+load(":jetifier.bzl", "JETIFIER_ARTIFACT_MAPPING")
 
 # An enum of known labels
 labels = struct(
@@ -56,6 +57,12 @@ def _process_dependency(dep_node):
             optional = strings.trim(c.content).lower() == "true"
         elif c.label == labels.SYSTEM_PATH:
             system_path = c.content
+
+    # TODO: Respect use_jetifier from `maven.bzl`
+    coordinate = "%s:%s" % (group_id, artifact_id)
+    if coordinate in JETIFIER_ARTIFACT_MAPPING:
+        group_id, artifact_id = JETIFIER_ARTIFACT_MAPPING[coordinate].split(':')
+        version = "unspecified"
 
     return _dependency(
         group_id = group_id,
@@ -396,8 +403,7 @@ def _get_inheritance_chain(ctx, artifact):
     inheritance_chain = []
     current = artifact
     for _ in range(100):  # Can't use recursion, so just iterate
-        if not bool(current):
-            ctx.report_progress("Merging poms for %s" % artifact.original_spec)
+        if current == None:
             return inheritance_chain
         path = ctx.path(fetch_repo.pom_target_relative_to(current, fetch_repo.pom_repo_name(artifact)))
         ctx.report_progress("Reading pom for %s" % current.original_spec)

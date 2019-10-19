@@ -22,6 +22,7 @@ load(":packaging_type.bzl", "packaging_type")
 load(":poms.bzl", "poms")
 load(":sets.bzl", "sets")
 load(":utils.bzl", "dicts", "paths", "strings")
+load(":jetifier.bzl", "jetifier_init", "jetify")
 
 #enum
 artifact_config_properties = struct(
@@ -57,7 +58,7 @@ load("@{maven_rules_repository}//maven:maven.bzl", "maven_jvm_artifact")
 _MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
     name = "{target}",{test_only}
     artifact = "{artifact_spec}",
-    type = "{type}",
+    type = "{type}",{use_jetifier}
 {deps})
 """
 
@@ -114,6 +115,7 @@ def _generate_maven_repository_impl(ctx):
         for spec in grouped_specs:
             sets.add(known_artifacts, artifact_utils.parse_spec(spec).coordinates)
     build_files = {}
+    missing_artifacts = []
     for group_id, specs_list in ctx.attr.grouped_artifacts.items():
         package_target_substitutes = target_substitutes.get(group_id, {})
         specs = sets.copy_of(specs_list)
@@ -145,15 +147,11 @@ def _generate_maven_repository_impl(ctx):
                 normalized_deps = [_normalize_target(x, group_path, package_target_substitutes) for x in bazel_deps]
                 unregistered = sets.difference(known_artifacts, sets.copy_of(found_artifacts))
                 if bool(unregistered):
-                    unregistered_deps = [
+                    missing_artifacts += [
                         poms.format_dependency(x)
                         for x in maven_deps
                         if sets.contains(unregistered, x.coordinates)
                     ]
-                    fail("Some dependencies of %s were not pinned in the artifacts list:\n%s" % (
-                        spec,
-                        list(unregistered_deps),
-                    ))
                 test_only_subst = (
                     "\n    testonly = True," if sets.contains(test_only_artifacts, spec) else ""
                 )
@@ -164,6 +162,7 @@ def _generate_maven_repository_impl(ctx):
                         artifact_spec = artifact.original_spec,
                         type = poms.extract_packaging(pom),
                         test_only = test_only_subst,
+                        use_jetifier = "\n    use_jetifier = True," if ctx.attr.use_jetifier else ""
                     ),
                 )
 
@@ -179,6 +178,13 @@ def _generate_maven_repository_impl(ctx):
         file = "%s/BUILD.bazel" % group_path
         content = "\n".join([prefix] + target_definitions)
         ctx.file(file, content)
+    if bool(missing_artifacts):
+        missing_deps_text = "Some dependencies of %s were not pinned in the artifacts list\n" % spec
+        missing_deps_text = "Please add the following to your maven_repository_specification:\n"
+        missing_deps_text += ("[\n" +
+            "".join(["    \"%s\": { \"insecure\": True },\n" % a for a in missing_artifacts]) +
+            "]\n")
+        fail(missing_deps_text)
 
 _generate_maven_repository = repository_rule(
     implementation = _generate_maven_repository_impl,
@@ -191,8 +197,22 @@ _generate_maven_repository = repository_rule(
         "exclusions": attr.string_list_dict(),
         "legacy_artifact_id_munge": attr.bool(mandatory = False, default = False),
         "poms": attr.label_list(),
+        "use_jetifier": attr.bool(default = False),
     },
 )
+
+JETIFIER_EXCLUDED_ARTIFACTS = [
+    "javax.annotation:jsr250-api",
+    "com.google.code.findbugs:jsr305",
+    "com.google.errorprone:javac-shaded",
+    "com.google.googlejavaformat:google-java-format",
+    "com.squareup:javapoet",
+    "com.google.dagger:dagger-compiler",
+    "com.google.dagger:dagger-producers",
+    "com.google.dagger:dagger-spi",
+    "com.google.dagger:dagger",
+    "javax.inject:javax.inject",
+]
 
 # Check... you know... for duplicates.  And fail if there are any, listing the extra artifacts.  Also fail if
 # there are -SNAPSHOT versions, since bazel requires pinned versions.
@@ -291,11 +311,25 @@ def maven_jvm_artifact(
         # Any dependencies of this artifact.
         deps = [],
 
+        # Process this artifact with jetifier.
+        use_jetifier = False,
+
         # Extra arguments passed through to the raw import rules that underly this macro.
         **kwargs):
     artifact_struct = artifact_utils.parse_spec(artifact)
     artifact_type = packaging_type.value_of(type) if bool(type) else packaging_type.value_of(artifact_struct.type)
     maven_target = fetch_repo.artifact_target(artifact_struct, artifact_type.suffix)
+
+    if use_jetifier:
+        jetified_name = name + "_jetified"
+        jetify(
+            name = jetified_name,
+            srcs = [maven_target]
+        )
+        file_target = "%s.%s" % (jetified_name, artifact_type.suffix)
+    else:
+        file_target = maven_target
+
     if artifact_type.suffix == "jar":
         raw_jvm_import(name = name, deps = deps, visibility = visibility, jar = maven_target, **kwargs)
     elif artifact_type.suffix == "aar":
@@ -331,11 +365,16 @@ def maven_repository_specification(
 
         # The dictionary of build-file substitutions (per-target) which will replace the auto-generated target
         # statements in the generated repository
+        # DEPRECATED: Please configure the artifact with a "build_snippet" property.
         build_substitutes = {},
 
         # The dictionary of per-group target substitutions.  These must be in the format:
         # "@myreponame//path/to/package:target": "@myrepotarget//path/to/package:alternate"
         dependency_target_substitutes = {},
+
+        # Activates Jetifier on the repository, if desired, rewriting maven deps and processing
+        # artifacts with the jetifier too.  Non-Android projects can disable this safely.
+        use_jetifier = True,
 
         # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
         repository_urls = ["https://repo1.maven.org/maven2"],
@@ -362,6 +401,10 @@ def maven_repository_specification(
     _validate_artifacts(artifacts)
 
     _check_for_duplicates(artifacts)
+
+    # Define repository rule for the jetifier tooling
+    jetifier_init()
+
     grouped_artifacts = {}
     build_snippets = {}
     pom_sha256_hashes = {}
@@ -396,6 +439,12 @@ def maven_repository_specification(
         poms.append(fetch_repo.pom_target(artifact))
 
         sha256 = properties.get(artifact_config_properties.SHA256)
+
+        should_jetify = (use_jetifier and
+            artifact.coordinates not in JETIFIER_EXCLUDED_ARTIFACTS and
+            artifact.group_id != "org.bouncycastle" and
+            not artifact.group_id.startswith("androidx"))
+
         fetch_artifact(
             name = fetch_repo.artifact_repo_name(artifact),
             artifact = artifact_spec,
