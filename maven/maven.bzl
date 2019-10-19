@@ -58,8 +58,7 @@ load("@{maven_rules_repository}//maven:maven.bzl", "maven_jvm_artifact")
 _MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
     name = "{target}",{test_only}
     artifact = "{artifact_spec}",
-    type = "{type}",
-    name = "{target}",{use_jetifier}
+    type = "{type}",{use_jetifier}
 {deps})
 """
 
@@ -211,35 +210,6 @@ JETIFIER_EXCLUDED_ARTIFACTS = [
     "javax.inject:javax.inject",
 ]
 
-# Implementation of the maven_jvm_artifact rule.
-def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], use_jetifier = False, **kwargs):
-    artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
-    maven_target = "@%s//%s:%s" % (artifact.maven_target_name, _DOWNLOAD_PREFIX, artifact.path)
-    import_target = artifact.maven_target_name + "_import"
-    target_name = name if name else artifact.third_party_target_name
-    coordinate = "%s:%s" % (artifact.group_id, artifact.artifact_id)
-
-    should_jetify = (use_jetifier and
-        coordinate not in JETIFIER_EXCLUDED_ARTIFACTS and
-        artifact.group_id != "org.bouncycastle" and
-        not artifact.group_id.startswith("androidx"))
-
-    if should_jetify:
-        target = target_name + "_jetified"
-        jetify(
-            name = target,
-            srcs = [maven_target]
-        )
-    else:
-        target = maven_target
-
-    if artifact.packaging == "jar":
-        raw_jvm_import(name = target_name, deps = deps, visibility = visibility, jar = target, **kwargs)
-    elif artifact.packaging == "aar":
-        native.aar_import(name = target_name, deps = deps, visibility = visibility, aar = target, **kwargs)
-    else:
-        fail("Packaging %s not supported by maven_jvm_artifact." % artifact.packaging)
-
 # Check... you know... for duplicates.  And fail if there are any, listing the extra artifacts.  Also fail if
 # there are -SNAPSHOT versions, since bazel requires pinned versions.
 def _check_for_duplicates(artifact_specs):
@@ -337,11 +307,25 @@ def maven_jvm_artifact(
         # Any dependencies of this artifact.
         deps = [],
 
+        # Process this artifact with jetifier.
+        use_jetifier = False,
+
         # Extra arguments passed through to the raw import rules that underly this macro.
         **kwargs):
     artifact_struct = artifact_utils.parse_spec(artifact)
     artifact_type = packaging_type.value_of(type) if bool(type) else packaging_type.value_of(artifact_struct.type)
     maven_target = fetch_repo.artifact_target(artifact_struct, artifact_type.suffix)
+
+    if use_jetifier:
+        jetified_name = name + "_jetified"
+        jetify(
+            name = jetified_name,
+            srcs = [maven_target]
+        )
+        file_target = "%s.%s" % (jetified_name, artifact_type.suffix)
+    else:
+        file_target = maven_target
+
     if artifact_type.suffix == "jar":
         raw_jvm_import(name = name, deps = deps, visibility = visibility, jar = maven_target, **kwargs)
     elif artifact_type.suffix == "aar":
@@ -377,14 +361,16 @@ def maven_repository_specification(
 
         # The dictionary of build-file substitutions (per-target) which will replace the auto-generated target
         # statements in the generated repository
+        # DEPRECATED: Please configure the artifact with a "build_snippet" property.
         build_substitutes = {},
 
         # The dictionary of per-group target substitutions.  These must be in the format:
         # "@myreponame//path/to/package:target": "@myrepotarget//path/to/package:alternate"
         dependency_target_substitutes = {},
 
-        #  TODO: Add suppot for opting out from jetifier
-        # use_jetifier = False,
+        # Activates Jetifier on the repository, if desired, rewriting maven deps and processing
+        # artifacts with the jetifier too.  Non-Android projects can disable this safely.
+        use_jetifier = True,
 
         # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
         repository_urls = ["https://repo1.maven.org/maven2"],
@@ -449,13 +435,19 @@ def maven_repository_specification(
         poms.append(fetch_repo.pom_target(artifact))
 
         sha256 = properties.get(artifact_config_properties.SHA256)
+
+        # TODO: Make this a more generalized exclusion list (and move
+        should_jetify = (use_jetifier and
+            artifact.coordinates not in JETIFIER_EXCLUDED_ARTIFACTS and
+            artifact.group_id != "org.bouncycastle" and
+            not artifact.group_id.startswith("androidx"))
+
         fetch_artifact(
             name = fetch_repo.artifact_repo_name(artifact),
             artifact = artifact_spec,
             repository_urls = repository_urls,
             sha256 = sha256,
             pom = fetch_repo.pom_target(artifact),
-            use_jetifier = True,
         )
 
         snippet = properties.get(artifact_config_properties.BUILD_SNIPPET)
