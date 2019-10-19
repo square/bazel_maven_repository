@@ -6,6 +6,7 @@ load(":globals.bzl", "DOWNLOAD_PREFIX", "fetch_repo")
 load(":packaging_type.bzl", "packaging_type")
 load(":utils.bzl", "strings")
 load(":xml.bzl", "xml")
+load(":jetifier.bzl", "JETIFIER_ARTIFACT_MAPPING")
 
 # An enum of known labels
 labels = struct(
@@ -56,6 +57,12 @@ def _process_dependency(dep_node):
             optional = strings.trim(c.content).lower() == "true"
         elif c.label == labels.SYSTEM_PATH:
             system_path = c.content
+
+    # TODO: Respect use_jetifier from `maven.bzl`
+    coordinate = "%s:%s" % (group_id, artifact_id)
+    if coordinate in JETIFIER_ARTIFACT_MAPPING:
+        group_id, artifact_id = JETIFIER_ARTIFACT_MAPPING[coordinate].split(':')
+        version = "unspecified"
 
     return _dependency(
         group_id = group_id,

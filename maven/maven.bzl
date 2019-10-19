@@ -22,6 +22,7 @@ load(":packaging_type.bzl", "packaging_type")
 load(":poms.bzl", "poms")
 load(":sets.bzl", "sets")
 load(":utils.bzl", "dicts", "paths", "strings")
+load(":jetifier.bzl", "jetifier_init", "jetify")
 
 #enum
 artifact_config_properties = struct(
@@ -58,6 +59,7 @@ _MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
     name = "{target}",{test_only}
     artifact = "{artifact_spec}",
     type = "{type}",
+    name = "{target}",{use_jetifier}
 {deps})
 """
 
@@ -164,6 +166,7 @@ def _generate_maven_repository_impl(ctx):
                         artifact_spec = artifact.original_spec,
                         type = poms.extract_packaging(pom),
                         test_only = test_only_subst,
+                        use_jetifier = "\n    use_jetifier = True," if ctx.attr.use_jetifier else ""
                     ),
                 )
 
@@ -191,8 +194,51 @@ _generate_maven_repository = repository_rule(
         "exclusions": attr.string_list_dict(),
         "legacy_artifact_id_munge": attr.bool(mandatory = False, default = False),
         "poms": attr.label_list(),
+        "use_jetifier": attr.bool(default = False),
     },
 )
+
+JETIFIER_EXCLUDED_ARTIFACTS = [
+    "javax.annotation:jsr250-api",
+    "com.google.code.findbugs:jsr305",
+    "com.google.errorprone:javac-shaded",
+    "com.google.googlejavaformat:google-java-format",
+    "com.squareup:javapoet",
+    "com.google.dagger:dagger-compiler",
+    "com.google.dagger:dagger-producers",
+    "com.google.dagger:dagger-spi",
+    "com.google.dagger:dagger",
+    "javax.inject:javax.inject",
+]
+
+# Implementation of the maven_jvm_artifact rule.
+def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], use_jetifier = False, **kwargs):
+    artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
+    maven_target = "@%s//%s:%s" % (artifact.maven_target_name, _DOWNLOAD_PREFIX, artifact.path)
+    import_target = artifact.maven_target_name + "_import"
+    target_name = name if name else artifact.third_party_target_name
+    coordinate = "%s:%s" % (artifact.group_id, artifact.artifact_id)
+
+    should_jetify = (use_jetifier and
+        coordinate not in JETIFIER_EXCLUDED_ARTIFACTS and
+        artifact.group_id != "org.bouncycastle" and
+        not artifact.group_id.startswith("androidx"))
+
+    if should_jetify:
+        target = target_name + "_jetified"
+        jetify(
+            name = target,
+            srcs = [maven_target]
+        )
+    else:
+        target = maven_target
+
+    if artifact.packaging == "jar":
+        raw_jvm_import(name = target_name, deps = deps, visibility = visibility, jar = target, **kwargs)
+    elif artifact.packaging == "aar":
+        native.aar_import(name = target_name, deps = deps, visibility = visibility, aar = target, **kwargs)
+    else:
+        fail("Packaging %s not supported by maven_jvm_artifact." % artifact.packaging)
 
 # Check... you know... for duplicates.  And fail if there are any, listing the extra artifacts.  Also fail if
 # there are -SNAPSHOT versions, since bazel requires pinned versions.
@@ -337,6 +383,9 @@ def maven_repository_specification(
         # "@myreponame//path/to/package:target": "@myrepotarget//path/to/package:alternate"
         dependency_target_substitutes = {},
 
+        #  TODO: Add suppot for opting out from jetifier
+        # use_jetifier = False,
+
         # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
         repository_urls = ["https://repo1.maven.org/maven2"],
 
@@ -362,6 +411,10 @@ def maven_repository_specification(
     _validate_artifacts(artifacts)
 
     _check_for_duplicates(artifacts)
+
+    # Define repository rule for the jetifier tooling
+    jetifier_init()
+
     grouped_artifacts = {}
     build_snippets = {}
     pom_sha256_hashes = {}
@@ -402,6 +455,7 @@ def maven_repository_specification(
             repository_urls = repository_urls,
             sha256 = sha256,
             pom = fetch_repo.pom_target(artifact),
+            use_jetifier = True,
         )
 
         snippet = properties.get(artifact_config_properties.BUILD_SNIPPET)
