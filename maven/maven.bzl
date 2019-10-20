@@ -103,8 +103,7 @@ def _get_dependencies_from_project(ctx, exclusions, project):
     exclusions = sets.copy_of(exclusions)
     maven_deps = [
         d for d in poms.extract_dependencies(project)
-        if not sets.contains(exclusions, d.coordinates)
-    ]
+            if not sets.contains(exclusions, d.coordinates)]
     return [_substitute(dep) for dep in maven_deps] if ctx.attr.use_jetifier else maven_deps
 
 def _deps_string(bazel_deps):
@@ -119,6 +118,24 @@ def _should_include_dependency(dep):
         not bool(dep.system_path) and
         not dep.optional
     )
+
+def _process_missing_dependencies(missing_artifacts):
+    missing_deps_text = "Some artifacts had dependencies not specified in the list:\n"
+    for artifact in missing_artifacts:
+        missing_deps_text += "    %s is missing:\n" % artifact
+        for dep in missing_artifacts[artifact]:
+            missing_deps_text += "        - %s\n" % dep
+    missing_deps_text += "\nPlease add the following to your maven_repository_specification: {\n"
+    missing_final_list = sets.copy_of(
+        # Use depset() as a lazy list with structure, to collapse the internal list.
+        depset(transitive = [depset(deps) for deps in missing_artifacts.values()]).to_list()
+    )
+    missing_deps_text += "".join([
+        "    \"%s\": { \"insecure\": True },\n" % a
+        for a in sorted(missing_final_list)
+    ])
+    missing_deps_text += "}\n"
+    return missing_deps_text
 
 def _generate_maven_repository_impl(ctx):
     # Generate the root WORKSPACE file
@@ -199,22 +216,7 @@ def _generate_maven_repository_impl(ctx):
         content = "\n".join([prefix] + target_definitions)
         ctx.file(file, content)
     if bool(missing_artifacts):
-        missing_deps_text = "Some artifacts had dependencies not specified in the list:\n"
-        for artifact in missing_artifacts:
-            missing_deps_text += "    %s is missing:\n" % artifact
-            for dep in missing_artifacts[artifact]:
-                missing_deps_text += "        - %s\n" % dep
-        missing_deps_text += "\nPlease add the following to your maven_repository_specification: {\n"
-        missing_final_list = sets.copy_of(
-            # Use depset() as a lazy list with structure, to collapse the internal list.
-            depset(transitive = [depset(deps) for deps in missing_artifacts.values()]).to_list()
-        )
-        missing_deps_text += "".join([
-            "    \"%s\": { \"insecure\": True },\n" % a
-            for a in sorted(missing_final_list)
-        ])
-        missing_deps_text += "}\n"
-        fail(missing_deps_text)
+        fail(_process_missing_dependencies(missing_artifacts))
 
 _generate_maven_repository = repository_rule(
     implementation = _generate_maven_repository_impl,
