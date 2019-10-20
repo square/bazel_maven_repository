@@ -124,9 +124,9 @@ COMPLEX_POM = POM_PREFIX + """
       <version>${findbugs.jsr305}</version>
     </dependency>
     <dependency>
-      <groupId>com.google.dagger</groupId>
-      <artifactId>dagger</artifactId>
-      <version>2.16</version>
+      <groupId>com.android.support</groupId>
+      <artifactId>support-annotations</artifactId>
+      <version>2.0.0</version>
     </dependency>
     <dependency>
       <groupId>org.codehaus.mojo</groupId>
@@ -174,9 +174,9 @@ MERGED_EXPECTED_POM = POM_PREFIX + """
       <version>${findbugs.jsr305}</version>
     </dependency>
     <dependency>
-      <groupId>com.google.dagger</groupId>
-      <artifactId>dagger</artifactId>
-      <version>2.16</version>
+      <groupId>com.android.support</groupId>
+      <artifactId>support-annotations</artifactId>
+      <version>2.0.0</version>
     </dependency>
     <dependency>
       <groupId>org.codehaus.mojo</groupId>

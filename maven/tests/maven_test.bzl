@@ -56,7 +56,11 @@ def get_dependencies_from_project_test(env):
     fake_ctx = struct(
         download = _noop_download,
         read = _fake_read_for_get_parent_chain,
-        attr = struct(repository_urls = [_FAKE_URL_PREFIX], cache_poms_insecurely = False),
+        attr = struct(
+            repository_urls = [_FAKE_URL_PREFIX],
+            cache_poms_insecurely = False,
+            use_jetifier = False,
+        ),
         report_progress = _noop_report_progress,
         path = _pass_through_path,
     )
@@ -71,11 +75,46 @@ def get_dependencies_from_project_test(env):
     dependencies = [d.coordinates for d in for_testing.get_dependencies_from_project(fake_ctx, ["junit:junit"], project)]
     asserts.false(env, sets.contains(sets.copy_of(dependencies), "junit:junit"), "Should NOT contain junit:junit")
 
+    asserts.true(
+        env,
+        sets.contains(sets.copy_of(dependencies), "com.android.support:support-annotations"),
+        "Should contain com.android.support:support-annotations")
+    asserts.false(
+        env,
+        sets.contains(sets.copy_of(dependencies), "androidx.annotation:annotation"),
+        "Should not contain androidx.annotation:annotation")
+
+def get_dependencies_from_project_test_with_jetifier(env):
+    fake_ctx = struct(
+        download = _noop_download,
+        read = _fake_read_for_get_parent_chain,
+        attr = struct(
+            repository_urls = [_FAKE_URL_PREFIX],
+            cache_poms_insecurely = False,
+            use_jetifier = True,
+        ),
+        report_progress = _noop_report_progress,
+        path = _pass_through_path,
+    )
+    artifact = artifacts.parse_spec("test.group:child:1.0")
+    project = poms_testing.merge_inheritance_chain(poms_testing.get_inheritance_chain(fake_ctx, artifact))
+
+    dependencies = [d.coordinates for d in for_testing.get_dependencies_from_project(fake_ctx, [], project)]
+    asserts.false(
+        env,
+        sets.contains(sets.copy_of(dependencies), "com.android.support:support-annotations"),
+        "Should not contain com.android.support:support-annotations")
+    asserts.true(
+        env,
+        sets.contains(sets.copy_of(dependencies), "androidx.annotation:annotation"),
+        "Should contain androidx.annotation:annotation")
+
 TESTS = [
     unsupported_keys_test,
     handle_legacy_sha_handling,
     handle_legacy_build_snippet_handling,
     get_dependencies_from_project_test,
+    get_dependencies_from_project_test_with_jetifier,
 ]
 
 # Roll-up function.
