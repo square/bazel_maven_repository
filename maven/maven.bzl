@@ -22,7 +22,7 @@ load(":packaging_type.bzl", "packaging_type")
 load(":poms.bzl", "poms")
 load(":sets.bzl", "sets")
 load(":utils.bzl", "dicts", "paths", "strings")
-load(":jetifier.bzl", "jetifier_init", "jetify")
+load(":jetifier.bzl", "jetifier_init", "jetify", "JETIFIER_ARTIFACT_MAPPING")
 
 #enum
 artifact_config_properties = struct(
@@ -82,10 +82,30 @@ def _normalize_target(full_target_spec, current_package, target_substitutions):
         return ":%s" % target  # Trim to a local reference.
     return full_package if paths.filename(full_package) == target else full_target_spec
 
+# Substitute the dep (if relevant) from the jettifier substitution dict.
+def _substitute(dep):
+    if dep.coordinates in JETIFIER_ARTIFACT_MAPPING:
+        group_id, artifact_id = JETIFIER_ARTIFACT_MAPPING[dep.coordinates].split(':')
+        return poms.dependency(
+            group_id = group_id,
+            artifact_id = artifact_id,
+            version = "unspecified",
+            type = dep.type,
+            optional = dep.optional,
+            scope = dep.scope,
+            classifier = dep.classifier,
+            system_path = dep.system_path,
+        )
+    else:
+        return dep
+
 def _get_dependencies_from_project(ctx, exclusions, project):
     exclusions = sets.copy_of(exclusions)
-    maven_deps = [d for d in poms.extract_dependencies(project) if not sets.contains(exclusions, d.coordinates)]
-    return maven_deps
+    maven_deps = [
+        d for d in poms.extract_dependencies(project)
+        if not sets.contains(exclusions, d.coordinates)
+    ]
+    return [_substitute(dep) for dep in maven_deps] if ctx.attr.use_jetifier else maven_deps
 
 def _deps_string(bazel_deps):
     if not bool(bazel_deps):
@@ -115,7 +135,7 @@ def _generate_maven_repository_impl(ctx):
         for spec in grouped_specs:
             sets.add(known_artifacts, artifact_utils.parse_spec(spec).coordinates)
     build_files = {}
-    missing_artifacts = []
+    missing_artifacts = {}
     for group_id, specs_list in ctx.attr.grouped_artifacts.items():
         package_target_substitutes = target_substitutes.get(group_id, {})
         specs = sets.copy_of(specs_list)
@@ -147,11 +167,11 @@ def _generate_maven_repository_impl(ctx):
                 normalized_deps = [_normalize_target(x, group_path, package_target_substitutes) for x in bazel_deps]
                 unregistered = sets.difference(known_artifacts, sets.copy_of(found_artifacts))
                 if bool(unregistered):
-                    missing_artifacts += [
+                    missing_artifacts.update({ spec: [
                         poms.format_dependency(x)
                         for x in maven_deps
                         if sets.contains(unregistered, x.coordinates)
-                    ]
+                    ]})
                 test_only_subst = (
                     "\n    testonly = True," if sets.contains(test_only_artifacts, spec) else ""
                 )
@@ -179,11 +199,21 @@ def _generate_maven_repository_impl(ctx):
         content = "\n".join([prefix] + target_definitions)
         ctx.file(file, content)
     if bool(missing_artifacts):
-        missing_deps_text = "Some dependencies of %s were not pinned in the artifacts list\n" % spec
-        missing_deps_text = "Please add the following to your maven_repository_specification:\n"
-        missing_deps_text += ("[\n" +
-            "".join(["    \"%s\": { \"insecure\": True },\n" % a for a in missing_artifacts]) +
-            "]\n")
+        missing_deps_text = "Some artifacts had dependencies not specified in the list:\n"
+        for artifact in missing_artifacts:
+            missing_deps_text += "    %s is missing:\n" % artifact
+            for dep in missing_artifacts[artifact]:
+                missing_deps_text += "        - %s\n" % dep
+        missing_deps_text += "\nPlease add the following to your maven_repository_specification: {\n"
+        missing_final_list = sets.copy_of(
+            # Use depset() as a lazy list with structure, to collapse the internal list.
+            depset(transitive = [depset(deps) for deps in missing_artifacts.values()]).to_list()
+        )
+        missing_deps_text += "".join([
+            "    \"%s\": { \"insecure\": True },\n" % a
+            for a in sorted(missing_final_list)
+        ])
+        missing_deps_text += "}\n"
         fail(missing_deps_text)
 
 _generate_maven_repository = repository_rule(
@@ -412,13 +442,23 @@ def maven_repository_specification(
     exclusions = {}
     artifact_structs = {}
     poms = []
+    legacy_android_support_artifacts = []
 
     # First pass, since some thing need to be globally available to each (like explicit pom shas)
     for artifact_spec, properties in artifacts.items():
-        artifact_structs[artifact_spec] = artifact_utils.parse_spec(artifact_spec)
+        artifact_struct = artifact_utils.parse_spec(artifact_spec)
+        artifact_structs[artifact_spec] = artifact_struct
         pom_hash = properties.get(artifact_config_properties.POM_SHA256)
         if bool(pom_hash):
             pom_sha256_hashes[artifact_spec] = pom_hash
+        if use_jetifier and artifact_struct.coordinates in JETIFIER_ARTIFACT_MAPPING:
+            legacy_android_support_artifacts += [artifact_spec]
+
+    if bool(legacy_android_support_artifacts):
+        fail(
+            "\nFound legacy support artifacts in list while use_jetifier=True:\n" +
+            "".join(["    - %s\n" % dep for dep in legacy_android_support_artifacts])
+        )
 
     for artifact_spec, properties in artifacts.items():
         artifact = artifact_structs[artifact_spec]
@@ -474,6 +514,7 @@ def maven_repository_specification(
         test_only_artifacts = test_only_artifacts,
         exclusions = exclusions,
         legacy_artifact_id_munge = legacy_artifact_id_munge,
+        use_jetifier = use_jetifier,
         poms = poms,
     )
 

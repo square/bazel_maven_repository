@@ -54,6 +54,9 @@ maven_repository_specification(
     # Enable the creation of older-style mangling where foo-bar becomes foo_bar (for migration)
     legacy_artifact_id_munge = True,
 
+    # Substitute old android artifacts in poms' deps for androidx ones, and process jars.
+    use_jetifier = True,
+
     # The artifact spec list.
     artifacts = {
         # This is the proper way to specify an artifact.  It contains the artifact, plus a configuration dictionary.
@@ -109,12 +112,15 @@ maven_repository_specification(
         "org.reflections:reflections:0.9.11": {"insecure": True }, # test leniency related to #62.
         "org.javassist:javassist:3.21.0-GA": {"insecure": True}, # Only needed if #62 is fixed.
         "androidx.arch.core:core-runtime:2.0.0": {"insecure": True},
-        "androidx.annotation:annotation:1.0.2": {"insecure": True},
-        "androidx.arch.core:core-common:2.0.0": {"insecure": True},
+        "androidx.annotation:annotation:1.0.0": { "insecure": True },
+        "androidx.arch.core:core-common:2.0.0": { "insecure": True },
+
+        # Legacy android dep. Uncommenting this will cause an error if use_jetifier = True.
+        # "com.android.support:support-v4:26.1.0:aar": { "insecure": True },
     },
     repository_urls = [
         "https://repo1.maven.org/maven2",
-        "https://maven.google.com"
+        "https://maven.google.com",
     ],
 
     # Because these apply to all targets within a group, it's specified separately from the artifact list.
