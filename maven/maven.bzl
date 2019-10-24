@@ -259,6 +259,8 @@ def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], use_jetifier
     should_jetify = (use_jetifier and
         coordinate not in JETIFIER_EXCLUDED_ARTIFACTS and
         artifact.group_id != "org.bouncycastle" and
+        artifact.group_id != "com.android.tools" and
+        artifact.group_id != "com.android.tools.build" and
         not artifact.group_id.startswith("androidx"))
 
     if should_jetify:
