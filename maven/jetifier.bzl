@@ -124,10 +124,10 @@ java_binary(
 
 def jetifier_init():
     _http_archive(
-        sha256 = "822f53fdcb9d5eeccb8f61ad7a51fe432c76d3cf1310ae63970e61500d66f98e",
+        sha256 = "8ef877e8245f8dcf8f379b2cdc4958ba714147eb8d559d8334a1840e137e5a2c",
         strip_prefix = "jetifier-standalone",
         name = "bazel_maven_repository_jetifier",
-        url = "https://dl.google.com/dl/android/studio/jetifier-zips/1.0.0-beta07/jetifier-standalone.zip",
+        url = "https://dl.google.com/dl/android/studio/jetifier-zips/1.0.0-beta08/jetifier-standalone.zip",
         build_file_content = BUILD_FILE_CONTENT,
     )
 
