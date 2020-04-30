@@ -51,6 +51,27 @@ filegroup(
     srcs = ["{path}"],
 )
 """
+_AAR_DOWNLOAD_BUILD_FILE = """
+package(default_visibility = ["//visibility:public"])
+exports_files(["AndroidManifest.xml", "classes.jar"])
+
+filegroup(
+  name = "resources",
+  srcs = glob(["res/**/*"])
+)
+
+filegroup(
+  name = "assets",
+  srcs = glob(["assets/**/*"])
+)
+
+filegroup(
+  name = "proguard",
+  srcs = glob(["proguard.txt"])
+)
+
+"""
+
 
 def _fetch_artifact_impl(ctx):
     repository_root_path = ctx.path(".")
@@ -67,11 +88,19 @@ def _fetch_artifact_impl(ctx):
     if download_path in forbidden_files or not str(download_path).startswith(str(repository_root_path)):
         fail("Invalid local_path: %s" % ctx.attr.local_path)
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
-    ctx.file(
-        "%s/BUILD.bazel" % _DOWNLOAD_PREFIX,
-        _ARTIFACT_DOWNLOAD_BUILD_FILE_TEMPLATE.format(prefix = _DOWNLOAD_PREFIX, path = ctx.attr.local_path),
-    )
-    ctx.download(url = ctx.attr.urls, output = local_path, sha256 = ctx.attr.sha256)
+
+    if ctx.attr.packaging == "aar":
+        ctx.file(
+            "%s/BUILD.bazel" % _DOWNLOAD_PREFIX,
+            _AAR_DOWNLOAD_BUILD_FILE,
+        )
+        ctx.download_and_extract(url = ctx.attr.urls, output = _DOWNLOAD_PREFIX, sha256 = ctx.attr.sha256, type = "zip")
+    else:
+        ctx.file(
+            "%s/BUILD.bazel" % _DOWNLOAD_PREFIX,
+            _ARTIFACT_DOWNLOAD_BUILD_FILE_TEMPLATE.format(prefix = _DOWNLOAD_PREFIX, path = ctx.attr.local_path),
+        )
+        ctx.download(url = ctx.attr.urls, output = local_path, sha256 = ctx.attr.sha256)
 
 _fetch_artifact = repository_rule(
     implementation = _fetch_artifact_impl,
@@ -79,6 +108,7 @@ _fetch_artifact = repository_rule(
         "local_path": attr.string(),
         "sha256": attr.string(),
         "urls": attr.string_list(mandatory = True),
+        "packaging": attr.string(),
     },
 )
 
@@ -90,8 +120,34 @@ load("@{maven_rules_repository}//maven:maven.bzl", "maven_jvm_artifact")
 _MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
     name = "{target}",
     artifact = "{artifact_coordinates}",{use_jetifier}
-{deps})
+    deps = [{deps}]
+)
 """
+
+
+_MAVEN_REPO_AAR_TARGET_TEMPLATE = """
+load("@build_bazel_rules_android//android:rules.bzl", "android_library")
+load("@{maven_rules_repository}//maven:jetifier.bzl", "jetify")
+load("@{maven_rules_repository}//maven:jvm.bzl", "raw_jvm_import")
+
+{jetify}
+raw_jvm_import(
+    name = "{target}_jar",
+    jar = {classes},
+)
+
+android_library(
+    name = "{target}",
+    manifest = "{aar_repo}:AndroidManifest.xml",
+    custom_package = "{package}",
+    visibility = ["//visibility:public"],
+    resource_files = ["{aar_repo}:resources"],
+    assets = ["{aar_repo}:assets"],
+    assets_dir = "assets",
+    deps = [":{target}_jar"] + [{deps}],
+)
+"""
+
 
 def _convert_maven_dep(repo_name, artifact):
     group_path = artifact.group_id.replace(".", "/")
@@ -108,18 +164,22 @@ def _normalize_target(full_target_spec, current_package, target_substitutions):
 
 # This should be in poms, but we want to keep ctx/network/file operations separate, and Starlark is constrained
 # enough that creating a "downloader" struct is more trouble than it's worth.
-def _fetch_pom(ctx, artifact):
+def _fetch_pom(ctx, artifact, fetched):
+    if fetched.get(artifact.pom, None) != None:
+        return fetched[artifact.pom]
     pom_urls = ["%s/%s" % (repo, artifact.pom) for repo in ctx.attr.repository_urls]
     pom_file = "%s/%s-%s.pom" % (artifact.group_path, artifact.artifact_id, artifact.version)
     ctx.download(url = pom_urls, output = pom_file)
     result = ctx.execute(["cat", pom_file])
     if result.return_code:
         fail("Error reading pom file %s (return code %s)" % (pom_file, result.return_code))
+
+    fetched[artifact.pom] = result.stdout
     return result.stdout
 
 # In theory, this logic should live in poms.bzl, but bazel makes it harder to use the strategy pattern (to pass in a
 # downloader) and we want to keep file and network code out of the poms processing code.
-def _get_inheritance_chain(ctx, xml_text):
+def _get_inheritance_chain(ctx, xml_text, fetched):
     inheritance_chain = [poms.parse(xml_text)]
     current = inheritance_chain[0]
     for _ in range(100):  # Can't use recursion, so just iterate
@@ -127,7 +187,7 @@ def _get_inheritance_chain(ctx, xml_text):
         if not bool(raw_parent_artifact):
             break
         parent_artifact = artifacts.annotate(raw_parent_artifact)
-        parent_node = poms.parse(_fetch_pom(ctx, parent_artifact))
+        parent_node = poms.parse(_fetch_pom(ctx, parent_artifact, fetched))
         inheritance_chain += [parent_node]
         current = parent_node
     return inheritance_chain
@@ -140,8 +200,8 @@ def _get_effective_pom(inheritance_chain):
         merged = poms.merge_parent(parent = merged, child = next)
     return merged
 
-def _get_dependencies_from_pom_files(ctx, artifact):
-    inheritance_chain = _get_inheritance_chain(ctx, _fetch_pom(ctx, artifact))
+def _get_dependencies_from_pom_files(ctx, artifact, fetched):
+    inheritance_chain = _get_inheritance_chain(ctx, _fetch_pom(ctx, artifact, fetched), fetched)
     project = _get_effective_pom(inheritance_chain)
     maven_deps = poms.extract_dependencies(project)
     return maven_deps
@@ -150,7 +210,7 @@ def _deps_string(bazel_deps):
     if not bool(bazel_deps):
         return ""
     bazel_deps = ["""        "%s",""" % x for x in bazel_deps]
-    return "    deps = [\n%s\n    ]\n" % "\n".join(bazel_deps) if bool(bazel_deps) else ""
+    return "\n%s" % "\n".join(bazel_deps) if bool(bazel_deps) else ""
 
 def _should_include_dependency(dep):
     return (
@@ -159,10 +219,78 @@ def _should_include_dependency(dep):
         not dep.optional
     )
 
+def _cut(str, *to_phrases):
+    start_idx = 0
+    for phrase in to_phrases:
+        idx = str.find(phrase, start_idx)
+        if idx == -1:
+            return ("", False)
+        start_idx = idx + len(phrase)
+
+    return (str[start_idx:].strip(), True)
+
+def _extract_android_package(ctx, manifest):
+    m = ctx.read(manifest)
+    pkg = ""
+    for tag in m.split("<"):
+        if tag.startswith("manifest"):
+            # matching package\s*=\s*"|'pkg"|'
+            quot_pkg_quot_trailing, ok = _cut(tag, "package", "=")
+            if not ok:
+                fail("can't find package = in |%s| of |%s|" % (tag, m))
+            start_quote = quot_pkg_quot_trailing[0]
+            if start_quote not in ("'", "\""):
+                fail("can't find quote = in |%s| of |%s|" % (quot_pkg_quot_trailing, m))
+            end_idx = quot_pkg_quot_trailing.find(start_quote, 1)
+            pkg = quot_pkg_quot_trailing[1:end_idx]
+            break
+
+    if pkg == "":
+        fail("unable to get package from [%v]", m)
+
+    return pkg
+
+def _aar_template_params(ctx, artifact, deps, manifest, should_jetify):
+    aar_repo = "@%s//%s" % (artifact.maven_target_name, _DOWNLOAD_PREFIX)
+    params = {
+        "aar_repo": aar_repo,
+        "package" : _extract_android_package(ctx, manifest),
+        "deps" : _deps_string(deps),
+        "target" : artifact.third_party_target_name,
+        "maven_rules_repository": ctx.attr.maven_rules_repository,
+    }
+    params.update(_aar_jars(ctx, artifact.third_party_target_name, aar_repo, should_jetify))
+    return params
+
+def _aar_jars(ctx, target, aar_repo, should_jetify):
+    if should_jetify:
+        return {
+            "jetify" : """
+jetify(
+   name = "{target}_jetified",
+   srcs = ["{aar_repo}:classes.jar"],
+)
+""".format(
+    target = target,
+    aar_repo = aar_repo
+),
+            "classes" : """ ":{target}_jetified" """.format(target = target)
+        }
+    return {
+        "jetify" : "",
+        "classes": """"{aar_repo}:classes.jar",""".format(aar_repo = aar_repo),
+    }
+
 def _generate_maven_repository_impl(ctx):
+    fetched = {}
     # Generate the root WORKSPACE file
     repository_root_path = ctx.path(".")
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
+
+    # Manifest lookup for aars
+    manifests = {}
+    for m in ctx.attr.manifests:
+        manifests[m.workspace_name] = m
 
     # Generate the per-group_id BUILD.bazel files.
     build_snippets = ctx.attr.build_snippets
@@ -172,9 +300,12 @@ def _generate_maven_repository_impl(ctx):
         artifact_structs = [artifacts.parse_spec(s) for s in specs]
         sets.add_all(processed_artifacts, ["%s:%s" % (a.group_id, a.artifact_id) for a in artifact_structs])
     build_files = {}
+    current_count = 0
+    total_count = len(ctx.attr.grouped_artifacts)
     for group_id, specs_list in ctx.attr.grouped_artifacts.items():
+        current_count += 1
         package_target_substitutes = target_substitutes.get(group_id, {})
-        ctx.report_progress("Generating build details for artifacts in %s" % group_id)
+        ctx.report_progress("[{current}/{total}] Generating build details for artifacts in {group_id}".format(group_id = group_id, current=current_count, total=total_count))
         specs = sets.copy_of(specs_list)
         prefix = _MAVEN_REPO_BUILD_PREFIX.format(
             group_id = group_id,
@@ -190,7 +321,7 @@ def _generate_maven_repository_impl(ctx):
             if snippet:
                 target_definitions.append(snippet)
             else:
-                maven_deps = _get_dependencies_from_pom_files(ctx, artifact)
+                maven_deps = _get_dependencies_from_pom_files(ctx, artifact, fetched)
                 maven_deps = [x for x in maven_deps if _should_include_dependency(x)]
                 found_artifacts = {}
                 bazel_deps = []
@@ -209,14 +340,26 @@ def _generate_maven_repository_impl(ctx):
                         spec,
                         list(unregistered_deps),
                     ))
-                target_definitions.append(
-                    _MAVEN_REPO_TARGET_TEMPLATE.format(
-                        target = artifact.third_party_target_name,
-                        deps = _deps_string(normalized_deps),
-                        artifact_coordinates = artifact.original_spec,
-                        use_jetifier = "\n    use_jetifier = True," if ctx.attr.use_jetifier else ""
-                    ),
-                )
+
+                if artifact.packaging == "aar":
+                    aar_params = _aar_template_params(
+                        ctx,
+                        artifact,
+                        normalized_deps,
+                        manifests[artifact.maven_target_name],
+                        ctx.attr.use_jetifier)
+                    target_definitions.append(
+                        _MAVEN_REPO_AAR_TARGET_TEMPLATE.format(**aar_params),
+                    )
+                else:
+                    target_definitions.append(
+                        _MAVEN_REPO_TARGET_TEMPLATE.format(
+                            target = artifact.third_party_target_name,
+                            deps = _deps_string(normalized_deps),
+                            artifact_coordinates = artifact.original_spec,
+                            use_jetifier = "\n    use_jetifier = True," if ctx.attr.use_jetifier else ""
+                        ),
+                    )
         file = "%s/BUILD.bazel" % group_path
         content = "\n".join([prefix] + target_definitions)
         ctx.file(file, content)
@@ -232,6 +375,7 @@ _generate_maven_repository = repository_rule(
         "dependency_target_substitutes": attr.string_list_dict(mandatory = True),
         "build_snippets": attr.string_dict(mandatory = True),
         "use_jetifier": attr.bool(default = False),
+        "manifests" : attr.label_list()
     },
 )
 
@@ -274,8 +418,6 @@ def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], use_jetifier
 
     if artifact.packaging == "jar":
         raw_jvm_import(name = target_name, deps = deps, visibility = visibility, jar = target, **kwargs)
-    elif artifact.packaging == "aar":
-        native.aar_import(name = target_name, deps = deps, visibility = visibility, aar = target, **kwargs)
     else:
         fail("Packaging %s not supported by maven_jvm_artifact." % artifact.packaging)
 
@@ -383,6 +525,7 @@ def _maven_repository_specification(
     _check_for_duplicates(artifact_declarations)
     grouped_artifacts = {}
     build_snippets = {}
+    manifests = []
     for artifact_spec, properties in artifact_declarations.items():
         artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
 
@@ -397,7 +540,10 @@ def _maven_repository_specification(
             urls = urls,
             local_path = artifact.path,
             sha256 = sha256,
+            packaging = artifact.packaging,
         )
+        if artifact.packaging == "aar":
+            manifests.append("@%s//%s:AndroidManifest.xml" % (artifact.maven_target_name, _DOWNLOAD_PREFIX))
         snippet = properties.get(artifact_config_properties.BUILD_SNIPPET, None)
         if bool(snippet):
             build_snippets["%s:%s" % (artifact.group_id, artifact.artifact_id)] = snippet
@@ -413,6 +559,7 @@ def _maven_repository_specification(
         dependency_target_substitutes = dependency_target_substitutes_rewritten,
         build_snippets = build_snippets,
         use_jetifier = use_jetifier,
+        manifests = manifests,
     )
 
 for_testing = struct(

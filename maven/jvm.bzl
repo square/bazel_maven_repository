@@ -38,7 +38,10 @@ def _raw_jvm_import(ctx):
     Supplied jar parameter (%s) transitively included more than one binary jar and one (optional)
     source jar.  Found: %s, %s""" % (ctx.file.jar, jars, source_jars))
 
-    default_info = DefaultInfo(files = depset(jars))
+    default_info = DefaultInfo(
+        files = depset(jars),
+        runfiles = ctx.runfiles(jars)
+        )
     java_info = JavaInfo(
         output_jar = jars[0],
         compile_jar = jars[0],

@@ -138,7 +138,7 @@ def _jetify_impl(ctx):
     outfiles = []
     for src in srcs:
         for artifact in src.files.to_list():
-            jetified_outfile = ctx.actions.declare_file("jetified_" + artifact.basename)
+            jetified_outfile = ctx.actions.declare_file(ctx.attr.name + "_jetified_" + artifact.basename)
             jetify_args = ctx.actions.args()
             jetify_args.add_all(["-l", "error"])
             jetify_args.add_all(["-o", jetified_outfile])
