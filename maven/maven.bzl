@@ -134,6 +134,7 @@ load("@{maven_rules_repository}//maven:jvm.bzl", "raw_jvm_import")
 raw_jvm_import(
     name = "{target}_jar",
     jar = {classes},
+    deps = [{deps}],
 )
 
 android_library(
@@ -145,6 +146,13 @@ android_library(
     assets = ["{aar_repo}:assets"],
     assets_dir = "assets",
     deps = [":{target}_jar"] + [{deps}],
+)
+"""
+
+_AAR_JETIFY_TEMPLATE =  """
+jetify(
+  name = "{target}_jetified",
+  srcs = ["{aar_repo}:classes.jar"],
 )
 """
 
@@ -231,7 +239,7 @@ def _cut(str, *to_phrases):
 
 def _extract_android_package(ctx, manifest):
     m = ctx.read(manifest)
-    pkg = ""
+    pkg = None
     for tag in m.split("<"):
         if tag.startswith("manifest"):
             # matching package\s*=\s*"|'pkg"|'
@@ -245,7 +253,7 @@ def _extract_android_package(ctx, manifest):
             pkg = quot_pkg_quot_trailing[1:end_idx]
             break
 
-    if pkg == "":
+    if pkg == None:
         fail("unable to get package from [%v]", m)
 
     return pkg
@@ -265,15 +273,7 @@ def _aar_template_params(ctx, artifact, deps, manifest, should_jetify):
 def _aar_jars(ctx, target, aar_repo, should_jetify):
     if should_jetify:
         return {
-            "jetify" : """
-jetify(
-   name = "{target}_jetified",
-   srcs = ["{aar_repo}:classes.jar"],
-)
-""".format(
-    target = target,
-    aar_repo = aar_repo
-),
+            "jetify" :_AAR_JETIFY_TEMPLATE.format(target = target, aar_repo = aar_repo),
             "classes" : """ ":{target}_jetified" """.format(target = target)
         }
     return {
