@@ -47,7 +47,7 @@ def get_pom_test(env):
         attr = struct(repository_urls = [_FAKE_URL_PREFIX])
     )
     project = poms.parse(
-        for_testing.fetch_pom(fake_ctx, artifacts.annotate(artifacts.parse_spec("test.group:child:1.0"))))
+        for_testing.fetch_pom(fake_ctx, artifacts.annotate(artifacts.parse_spec("test.group:child:1.0")), {}))
     asserts.equals(env, "project", project.label)
 
 
@@ -74,7 +74,7 @@ def get_parent_chain_test(env):
         execute = _fake_cat_for_get_parent_chain,
         attr = struct(repository_urls = [_FAKE_URL_PREFIX])
     )
-    chain = for_testing.get_inheritance_chain(fake_ctx, COMPLEX_POM)
+    chain = for_testing.get_inheritance_chain(fake_ctx, COMPLEX_POM, {})
     asserts.equals(env, ["child", "parent", "grandparent"], [_extract_artifact_id(x) for x in chain])
 
 def get_effective_pom_test(env):
