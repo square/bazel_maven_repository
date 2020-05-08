@@ -1,0 +1,16 @@
+load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kt_jvm_library")
+
+kt_jvm_library(
+    name = "kramer",
+    srcs = glob(["*.kt"]),
+    visibility = ["//visibility:public"],
+    deps = [
+        "@maven//com/github/ajalt:clikt",
+        "@maven//com/google/guava",
+        "@maven//com/squareup/moshi",
+        "@maven//com/squareup/moshi:moshi-kotlin",
+        "@maven//com/squareup/tools/build:maven-archeologist",
+        "@maven//org/jetbrains/kotlin:kotlin-stdlib",
+        "@maven//org/jetbrains/kotlinx:kotlinx-coroutines-core",
+    ],
+)

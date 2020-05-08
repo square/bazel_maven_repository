@@ -1,0 +1,13 @@
+load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kt_jvm_test")
+
+kt_jvm_test(
+    name = "CommonTest",
+    srcs = ["CommonTest.kt"],
+    friends = ["//src/main/kotlin/kramer"],
+    test_class = "kramer.CommonTest",
+    deps = [
+        "//src/main/kotlin/kramer",
+        "@maven//com/google/truth",
+        "@maven//junit",
+    ],
+)

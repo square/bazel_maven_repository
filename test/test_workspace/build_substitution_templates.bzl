@@ -32,7 +32,7 @@ java_plugin(
    name = "dagger-plugin",
    processor_class = "dagger.internal.codegen.ComponentProcessor",
    generates_api = True,
-   deps = [":dagger_compiler"],
+   deps = [":dagger-compiler"],
 )
 """
 
@@ -55,6 +55,7 @@ java_library(
 )
 
 # Legacy rule. This should be migrated to raw_jvm_import.
+load("@maven_repository_rules//maven:maven.bzl", "maven_jvm_artifact")
 maven_jvm_artifact(
    name = "auto-value-processor",
    artifact = "com.google.auto.value:auto-value:{version}",

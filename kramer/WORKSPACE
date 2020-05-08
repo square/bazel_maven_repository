@@ -1,0 +1,126 @@
+workspace(name = "test_workspace")
+
+# Set up maven
+local_repository(
+    name = "maven_repository_rules",
+    path = "..",
+)
+
+load("@maven_repository_rules//maven:maven.bzl", "maven_repository_specification")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+KOTLIN_VERSION = "1.3.72"
+
+KOTLINC_ROOT = "https://github.com/JetBrains/kotlin/releases/download"
+
+KOTLINC_URL = "{root}/v{v}/kotlin-compiler-{v}.zip".format(
+    root = KOTLINC_ROOT,
+    v = KOTLIN_VERSION,
+)
+
+KOTLINC_SHA = "ccd0db87981f1c0e3f209a1a4acb6778f14e63fe3e561a98948b5317e526cc6c"
+
+KOTLIN_RULES_VERSION = "legacy-1.4.0-rc3"
+
+KOTLIN_RULES_SHA = "da0e6e1543fcc79e93d4d93c3333378f3bd5d29e82c1bc2518de0dbe048e6598"
+
+http_archive(
+    name = "io_bazel_rules_kotlin",
+    sha256 = KOTLIN_RULES_SHA,
+    urls = ["https://github.com/bazelbuild/rules_kotlin/releases/download/%s/rules_kotlin_release.tgz" % KOTLIN_RULES_VERSION],
+)
+
+load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kotlin_repositories", "kt_register_toolchains")
+
+kotlin_repositories(compiler_release = {
+    "urls": [KOTLINC_URL],
+    "sha256": KOTLINC_SHA,
+})
+
+kt_register_toolchains()
+
+OKIO_SNIPPET = """
+# Custom snippet for com.squareup.okio:okio:2.4.3
+
+alias(name = "notokio", actual = "okio")
+
+raw_jvm_import(
+    name = "okio",
+    jar = "@com_squareup_okio_okio//maven:com/squareup/okio/okio/2.4.3/okio-2.4.3.jar",
+    deps = [
+        "@maven//org/jetbrains/kotlin:kotlin-stdlib",
+        "@maven//org/jetbrains/kotlin:kotlin-stdlib-common",
+    ],
+    visibility = ["//visibility:public"]
+)
+"""
+
+maven_repository_specification(
+    name = "maven",
+
+    # The artifact spec list.
+    artifacts = {
+        "com.github.ajalt:clikt:2.7.1": {"insecure": True},
+        "com.google.code.findbugs:jsr305:3.0.2": {"insecure": True},
+        "com.google.errorprone:error_prone_annotations:2.3.1": {"insecure": True},
+        "com.google.guava:guava:27.1-jre": {
+            "insecure": True,
+            "exclude": [
+                "com.google.guava:failureaccess",
+                "com.google.guava:listenablefuture",
+            ],
+        },
+        "com.google.j2objc:j2objc-annotations:1.1": {"insecure": True},
+        "com.google.truth:truth:1.0": {
+            "insecure": True,
+            "testonly": True,
+            "exclude": ["com.google.auto.value:auto-value-annotations"],
+        },
+        "com.googlecode.java-diff-utils:diffutils:1.3.0": {"insecure": True},
+        "com.squareup.moshi:moshi:1.9.2": {"insecure": True},
+        "com.squareup.moshi:moshi-kotlin:1.9.2": {"insecure": True},
+        "com.squareup.okhttp3:okhttp:4.4.1": {"insecure": True},
+        "com.squareup.okio:okio:2.4.3": {
+            "insecure": True,
+            "build_snippet": OKIO_SNIPPET,
+        },
+        "com.squareup.tools.build:maven-archeologist:0.0.3.1": {"insecure": True},
+        "junit:junit:4.13": {
+            "insecure": True,
+            "testonly": True,
+        },
+        "org.apache.commons:commons-lang3:3.8.1": {"insecure": True},
+        "org.apache.maven:maven-artifact:3.6.3": {"insecure": True},
+        "org.apache.maven:maven-builder-support:3.6.3": {"insecure": True},
+        "org.apache.maven:maven-model-builder:3.6.3": {
+            "insecure": True,
+            "exclude": [
+                "javax.inject:javax.inject",
+                "org.eclipse.sisu:org.eclipse.sisu.inject",
+            ],
+        },
+        "org.apache.maven:maven-model:3.6.3": {"insecure": True},
+        "org.checkerframework:checker-compat-qual:2.5.5": {"insecure": True},
+        "org.checkerframework:checker-qual:2.5.2": {"insecure": True},
+        "org.codehaus.mojo:animal-sniffer-annotations:1.17": {"insecure": True},
+        "org.codehaus.plexus:plexus-interpolation:1.25": {"insecure": True},
+        "org.codehaus.plexus:plexus-utils:3.2.1": {"insecure": True},
+        "org.hamcrest:hamcrest-core:1.3": {"insecure": True},
+        "org.jetbrains.kotlin:kotlin-reflect:%s" % KOTLIN_VERSION: {"insecure": True},
+        "org.jetbrains.kotlin:kotlin-stdlib-common:%s" % KOTLIN_VERSION: {"insecure": True},
+        "org.jetbrains.kotlin:kotlin-stdlib:%s" % KOTLIN_VERSION: {"insecure": True},
+        "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.5": {"insecure": True},
+        "org.jetbrains:annotations:13.0": {"insecure": True},
+        "org.ow2.asm:asm:7.1": {"insecure": True},
+    },
+    repository_urls = {
+        "central": "https://repo1.maven.org/maven2",
+        "google": "https://maven.google.com",
+    },
+)
+
+android_sdk_repository(
+    name = "androidsdk",
+    api_level = 29,
+    build_tools_version = "29.0.3",
+)

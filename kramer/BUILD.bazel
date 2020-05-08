@@ -1,0 +1,8 @@
+java_binary(
+    name = "kramer",
+    main_class = "kramer.KramerKt",
+    visibility = ["//visibility:public"],
+    runtime_deps = [
+        "//src/main/kotlin/kramer",
+    ],
+)

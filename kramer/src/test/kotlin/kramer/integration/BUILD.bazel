@@ -1,0 +1,16 @@
+load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kt_jvm_test")
+
+kt_jvm_test(
+    name = "KramerIntegrationTest",
+    size = "large",
+    srcs = ["KramerIntegrationTest.kt"],
+    data = glob(["*.json"]),
+    flaky = True,
+    friends = ["//src/main/kotlin/kramer"],
+    test_class = "kramer.integration.KramerIntegrationTest",
+    deps = [
+        "//src/main/kotlin/kramer",
+        "@maven//com/google/truth",
+        "@maven//junit",
+    ],
+)

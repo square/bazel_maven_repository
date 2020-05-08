@@ -1,16 +1,7 @@
-load(":dicts_test.bzl", dicts = "suite")
-load(":paths_test.bzl", paths = "suite")
-load(":maven_test.bzl", maven = "suite")
-load(":poms_test.bzl", poms = "suite")
-load(":poms_merging_test.bzl", poms_merging = "suite")
 load(":sets_test.bzl", set_tests = "suite")
-load(":strings_test.bzl", strings = "suite")
-load(":xml_test.bzl", xml = "suite")
-
 load("//maven:sets.bzl", "sets")
 
-
-SUITES = [dicts, paths, maven, poms, poms_merging, set_tests, strings, xml]
+SUITES = [set_tests]
 
 def _validate(ctx, suites):
     # Function objects don't have good properties, so we hack it from the string representation.
@@ -35,5 +26,5 @@ all_tests = rule(
     implementation = _all_tests_rule_impl,
     attrs = {
         "srcs": attr.label_list(allow_files = True),
-    }
+    },
 )

@@ -57,7 +57,7 @@ maven_repository_specification(
         # The config dictionary contains a sha256 hash. This both ensures the file downloaded is the expected one, but
         # also caches the file in bazel's "content addressable" cache, which survives build clean.
         "com.google.guava:guava:25.0-jre": {
-            "sha256": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9"
+            "sha256": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9",
         },
         "com.google.dagger:dagger:2.20": {
             "sha256": "d37a556d8d57e2428c20e222b95346512d11fcf2174d581489a69a1439b886fb",
@@ -104,10 +104,10 @@ maven_repository_specification(
             "insecure": True,
             "build_snippet": AUTO_VALUE_BUILD_SNIPPET_WITH_PLUGIN.format(version = "1.6.3"),
         },
-        "androidx.core:core:1.1.0:aar": {"insecure": True},
+        "androidx.core:core:1.1.0": {"insecure": True},
         "androidx.annotation:annotation:1.1.0": {"insecure": True},
-        "androidx.lifecycle:lifecycle-runtime:2.0.0:aar": {"insecure": True},
-        "androidx.versionedparcelable:versionedparcelable:1.1.0:aar": {"insecure": True},
+        "androidx.lifecycle:lifecycle-runtime:2.0.0": {"insecure": True},
+        "androidx.versionedparcelable:versionedparcelable:1.1.0": {"insecure": True},
         "androidx.collection:collection:1.0.0": {"insecure": True},
         "androidx.lifecycle:lifecycle-common:2.0.0": {"insecure": True},
         "androidx.arch.core:core-common:2.0.0": {"insecure": True},
@@ -138,12 +138,11 @@ maven_repository_specification(
         # "foo.*.bar:baz", # Groups may only have "startswith" style globbing.
         # "*.bar:baz",  # Groups may only have "startswith" style globbing.
     ],
-    repository_urls = [
-        "https://repo1.maven.org/maven2",
-        "https://dl.google.com/dl/android/maven2",
-    ],
+    repository_urls = {
+        "central": "https://repo1.maven.org/maven2",
+        "google": "https://dl.google.com/dl/android/maven2",
+    },
     use_jetifier = True,
-    legacy_underscore = True,
 )
 
 # Set up the standard android SDK repository, upon which depend a lot of the android tooling in bazel.
