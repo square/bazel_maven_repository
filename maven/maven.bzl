@@ -352,7 +352,6 @@ def _generate_maven_repository_impl(ctx):
                     enabled = ctx.attr.use_jetifier,
                     excludes = jetifier_excludes,
                 )
-                use_jetifier_snippet = "\n    use_jetifier = True," if use_jetifier else ""
                 if artifact.packaging == "aar":
                     aar_params = _aar_template_params(
                         ctx,
@@ -369,7 +368,7 @@ def _generate_maven_repository_impl(ctx):
                             target = artifact.third_party_target_name,
                             deps = _deps_string(normalized_deps),
                             artifact_coordinates = artifact.original_spec,
-                            use_jetifier = use_jetifier_snippet
+                            use_jetifier = "\n    use_jetifier = True," if use_jetifier else ""
                         ),
                     )
         file = "%s/BUILD.bazel" % group_path
