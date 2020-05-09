@@ -18,6 +18,7 @@ java_test(
     srcs = ["FooTest.java"],
     deps = [
         "//java/foo",
+        "@maven//com/google/truth",
         "@maven//junit",
     ],
 )

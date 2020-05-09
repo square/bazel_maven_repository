@@ -19,7 +19,13 @@ load(":jvm.bzl", "raw_jvm_import")
 load(":poms.bzl", "poms")
 load(":sets.bzl", "sets")
 load(":utils.bzl", "dicts", "paths", "strings")
-load(":jetifier.bzl", "jetifier_init", "jetify")
+load(
+    ":jetifier.bzl",
+    "DEFAULT_JETIFIER_EXCLUDED_ARTIFACTS",
+    "jetifier_init",
+    "jetify",
+    "jetify_utils",
+)
 
 #enum
 artifact_config_properties = struct(
@@ -293,6 +299,7 @@ def _generate_maven_repository_impl(ctx):
         manifests[m.workspace_name] = m
 
     # Generate the per-group_id BUILD.bazel files.
+    jetifier_excludes = jetify_utils.prepare_jetifier_excludes(ctx)
     build_snippets = ctx.attr.build_snippets
     target_substitutes = dicts.decode_nested(ctx.attr.dependency_target_substitutes)
     processed_artifacts = sets.new()
@@ -340,14 +347,18 @@ def _generate_maven_repository_impl(ctx):
                         spec,
                         list(unregistered_deps),
                     ))
-
+                use_jetifier = jetify_utils.should_use_jetifier(
+                    coordinates = coordinates,
+                    enabled = ctx.attr.use_jetifier,
+                    excludes = jetifier_excludes,
+                )
                 if artifact.packaging == "aar":
                     aar_params = _aar_template_params(
                         ctx,
                         artifact,
                         normalized_deps,
                         manifests[artifact.maven_target_name],
-                        ctx.attr.use_jetifier)
+                        use_jetifier)
                     target_definitions.append(
                         _MAVEN_REPO_AAR_TARGET_TEMPLATE.format(**aar_params),
                     )
@@ -357,14 +368,12 @@ def _generate_maven_repository_impl(ctx):
                             target = artifact.third_party_target_name,
                             deps = _deps_string(normalized_deps),
                             artifact_coordinates = artifact.original_spec,
-                            use_jetifier = "\n    use_jetifier = True," if ctx.attr.use_jetifier else ""
+                            use_jetifier = "\n    use_jetifier = True," if use_jetifier else ""
                         ),
                     )
         file = "%s/BUILD.bazel" % group_path
         content = "\n".join([prefix] + target_definitions)
         ctx.file(file, content)
-
-# build_files[build_file] = build_content
 
 _generate_maven_repository = repository_rule(
     implementation = _generate_maven_repository_impl,
@@ -375,22 +384,10 @@ _generate_maven_repository = repository_rule(
         "dependency_target_substitutes": attr.string_list_dict(mandatory = True),
         "build_snippets": attr.string_dict(mandatory = True),
         "use_jetifier": attr.bool(default = False),
+        "jetifier_excludes": attr.string_list(mandatory = True),
         "manifests" : attr.label_list()
     },
 )
-
-JETIFIER_EXCLUDED_ARTIFACTS = [
-    "javax.annotation:jsr250-api",
-    "com.google.code.findbugs:jsr305",
-    "com.google.errorprone:javac-shaded",
-    "com.google.googlejavaformat:google-java-format",
-    "com.squareup:javapoet",
-    "com.google.dagger:dagger-compiler",
-    "com.google.dagger:dagger-producers",
-    "com.google.dagger:dagger-spi",
-    "com.google.dagger:dagger",
-    "javax.inject:javax.inject",
-]
 
 # Implementation of the maven_jvm_artifact rule.
 def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], use_jetifier = False, **kwargs):
@@ -400,18 +397,11 @@ def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], use_jetifier
     target_name = name if name else artifact.third_party_target_name
     coordinate = "%s:%s" % (artifact.group_id, artifact.artifact_id)
 
-    should_jetify = (use_jetifier and
-        coordinate not in JETIFIER_EXCLUDED_ARTIFACTS and
-        artifact.group_id != "org.bouncycastle" and
-        artifact.group_id != "com.android.tools" and
-        artifact.group_id != "com.android.tools.build" and
-        not artifact.group_id.startswith("androidx"))
-
-    if should_jetify:
+    if use_jetifier:
         target = target_name + "_jetified"
         jetify(
             name = target,
-            srcs = [maven_target]
+            srcs = [maven_target],
         )
     else:
         target = maven_target
@@ -507,11 +497,12 @@ def _handle_legacy_specifications(artifact_declarations, insecure_artifacts, bui
 #
 def _maven_repository_specification(
         name,
+        use_jetifier,
+        jetifier_excludes,
         artifact_declarations = {},
         insecure_artifacts = [],
         build_substitutes = {},
         dependency_target_substitutes = {},
-        use_jetifier = False,
         repository_urls = ["https://repo1.maven.org/maven2"]):
     _handle_legacy_specifications(artifact_declarations, insecure_artifacts, build_substitutes)
 
@@ -559,6 +550,7 @@ def _maven_repository_specification(
         dependency_target_substitutes = dependency_target_substitutes_rewritten,
         build_snippets = build_snippets,
         use_jetifier = use_jetifier,
+        jetifier_excludes = jetifier_excludes,
         manifests = manifests,
     )
 
@@ -613,13 +605,19 @@ def maven_repository_specification(
         # "@myreponame//path/to/package:target": "@myrepotarget//path/to/package:alternate"
         dependency_target_substitutes = {},
 
-        #  TODO: Add suppot for opting out from jetifier
-        # use_jetifier = False,
+        # Activate jetifier on maven artifacts, except where excluded
+        use_jetifier = False,
+
+        # A list of artifacts to be excluded from jetifier processing, in the form "group:artifact"
+        # Note this is an exact group/artifact match. Future versions may support wildcards.
+        jetifier_excludes = DEFAULT_JETIFIER_EXCLUDED_ARTIFACTS,
 
         # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
         repository_urls = ["https://repo1.maven.org/maven2"]):
     # Define repository rule for the jetifier tooling
-    jetifier_init()
+    if (use_jetifier):
+        jetifier_init()
+
     # Redirected to _maven_repository_specification to allow the public parameter "artifacts" without conflicting
     # with the artifact utility struct.
     _maven_repository_specification(
@@ -628,6 +626,7 @@ def maven_repository_specification(
         insecure_artifacts = insecure_artifacts,
         build_substitutes = build_substitutes,
         dependency_target_substitutes = dependency_target_substitutes,
-        use_jetifier = True,
+        use_jetifier = use_jetifier,
         repository_urls = repository_urls,
+        jetifier_excludes = jetifier_excludes,
     )
