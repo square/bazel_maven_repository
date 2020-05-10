@@ -1,0 +1,14 @@
+load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kt_android_library")
+
+package(default_visibility = ["//:__subpackages__"])
+
+kt_android_library(
+    name = "android",
+    custom_package = "android.blah",
+    srcs = ["src/main/java/blah/Blah.kt"],
+    manifest = "src/main/AndroidManifest.xml",
+    deps = [
+        "//java/foo",
+        "@maven//androidx/core"
+    ],
+)

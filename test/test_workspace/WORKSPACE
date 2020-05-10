@@ -14,6 +14,13 @@ load(
 )
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
+http_archive(
+    name = "build_bazel_rules_android",
+    sha256 = "cd06d15dd8bb59926e4d65f9003bfc20f9da4b2519985c27e190cddc8b7a7806",
+    strip_prefix = "rules_android-0.1.1",
+    urls = ["https://github.com/bazelbuild/rules_android/archive/v0.1.1.zip"],
+)
+
 KOTLIN_VERSION = "1.3.71"
 
 KOTLINC_RELEASE_SHA = "7adb77dad99c6d2f7bde9f8bafe4c6244a04587a8e36e62b074d00eda9f8e74a"
@@ -89,6 +96,13 @@ maven_repository_specification(
             "insecure": True,
             "build_snippet": AUTO_VALUE_BUILD_SNIPPET_WITH_PLUGIN.format(version = "1.6.3"),
         },
+        "androidx.core:core:1.1.0:aar": {"insecure": True},
+        "androidx.annotation:annotation:1.1.0": {"insecure": True},
+        "androidx.lifecycle:lifecycle-runtime:2.0.0:aar": {"insecure": True},
+        "androidx.versionedparcelable:versionedparcelable:1.1.0:aar": {"insecure": True},
+        "androidx.collection:collection:1.0.0": {"insecure": True},
+        "androidx.lifecycle:lifecycle-common:2.0.0": {"insecure": True},
+        "androidx.arch.core:core-common:2.0.0": {"insecure": True},
     },
     # Because these apply to all targets within a group, it's specified separately from the artifact list.
     dependency_target_substitutes = {
@@ -99,6 +113,7 @@ maven_repository_specification(
         "com.google.dagger": {"@maven//com/google/dagger:dagger": "@maven//com/google/dagger:dagger_api"},
     },
     jetifier_excludes = [
+        "androidx.*:*",
         "javax.*:jsr250-api",
         "com.google.code.findbugs:jsr305",
         "com.google.errorprone:javac-shaded",
@@ -115,5 +130,16 @@ maven_repository_specification(
         # "foo.*.bar:baz", # Groups may only have "startswith" style globbing.
         # "*.bar:baz",  # Groups may only have "startswith" style globbing.
     ],
+    repository_urls = [
+        "https://repo1.maven.org/maven2",
+        "https://dl.google.com/dl/android/maven2",
+    ],
     use_jetifier = True,
+)
+
+# Set up the standard android SDK repository, upon which depend a lot of the android tooling in bazel.
+android_sdk_repository(
+    name = "androidsdk",
+    api_level = 29,
+    build_tools_version = "29.0.3",
 )
