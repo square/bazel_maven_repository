@@ -94,7 +94,6 @@ def _fetch_artifact_impl(ctx):
     if download_path in forbidden_files or not str(download_path).startswith(str(repository_root_path)):
         fail("Invalid local_path: %s" % ctx.attr.local_path)
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
-
     if ctx.attr.packaging == "aar":
         ctx.file(
             "%s/BUILD.bazel" % _DOWNLOAD_PREFIX,
@@ -132,15 +131,15 @@ _MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
 
 
 _MAVEN_REPO_AAR_TARGET_TEMPLATE = """
-load("@build_bazel_rules_android//android:rules.bzl", "android_library")
-load("@{maven_rules_repository}//maven:jetifier.bzl", "jetify")
+load("@build_bazel_rules_android//android:rules.bzl", "android_library"){jetify_import}
 load("@{maven_rules_repository}//maven:jvm.bzl", "raw_jvm_import")
 
 {jetify}
 raw_jvm_import(
     name = "{target}_jar",
     jar = {classes},
-    deps = [{deps}],
+    deps = [{deps}
+    ],
 )
 
 android_library(
@@ -279,12 +278,17 @@ def _aar_template_params(ctx, artifact, deps, manifest, should_jetify):
 def _aar_jars(ctx, target, aar_repo, should_jetify):
     if should_jetify:
         return {
-            "jetify" :_AAR_JETIFY_TEMPLATE.format(target = target, aar_repo = aar_repo),
-            "classes" : """ ":{target}_jetified" """.format(target = target)
+            "jetify_import":
+                "\nload(\"@{maven_rules_repository}//maven:jetifier.bzl\", \"jetify\")".format(
+                    maven_rules_repository = ctx.attr.maven_rules_repository
+                ),
+            "jetify": _AAR_JETIFY_TEMPLATE.format(target = target, aar_repo = aar_repo),
+            "classes": " \":{target}_jetified\"".format(target = target)
         }
     return {
-        "jetify" : "",
-        "classes": """"{aar_repo}:classes.jar",""".format(aar_repo = aar_repo),
+        "jetify_import": "",
+        "jetify": "",
+        "classes": "\"{aar_repo}:classes.jar\"".format(aar_repo = aar_repo),
     }
 
 def _generate_maven_repository_impl(ctx):
@@ -613,7 +617,8 @@ def maven_repository_specification(
         jetifier_excludes = DEFAULT_JETIFIER_EXCLUDED_ARTIFACTS,
 
         # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
-        repository_urls = ["https://repo1.maven.org/maven2"]):
+        repository_urls = ["https://repo1.maven.org/maven2"],
+    ):
     # Define repository rule for the jetifier tooling
     if (use_jetifier):
         jetifier_init()
