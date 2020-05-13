@@ -14,13 +14,13 @@
 DAGGER_BUILD_SNIPPET_WITH_PLUGIN = """
 java_library(
    name = "dagger",
-   exports = [":dagger_api"],
-   exported_plugins = [":dagger_plugin"],
+   exports = [":dagger-api"],
+   exported_plugins = [":dagger-plugin"],
    visibility = ["//visibility:public"],
 )
 
 maven_jvm_artifact(
-   name = "dagger_api",
+   name = "dagger-api",
    exports = [
        "@maven//javax/inject:javax_inject",
    ],
@@ -28,7 +28,7 @@ maven_jvm_artifact(
 )
 
 java_plugin(
-   name = "dagger_plugin",
+   name = "dagger-plugin",
    processor_class = "dagger.internal.codegen.ComponentProcessor",
    generates_api = True,
    deps = [":dagger_compiler"],
@@ -45,13 +45,13 @@ java_plugin(
 AUTO_VALUE_BUILD_SNIPPET_WITH_PLUGIN = """
 java_library(
    name = "value",
-   exports = [":auto_value_annotations"],
+   exports = [":auto-value-annotations"],
    exported_plugins = [":plugin"],
    visibility = ["//visibility:public"],
 )
 
 maven_jvm_artifact(
-   name = "auto_value_processor",
+   name = "auto-value-processor",
    artifact = "com.google.auto.value:auto-value:{version}",
 )
 
@@ -59,6 +59,6 @@ java_plugin(
    name = "plugin",
    processor_class = "com.google.auto.value.processor.AutoValueProcessor",
    generates_api = True,
-   deps = [":auto_value_processor"],
+   deps = [":auto-value-processor"],
 )
 """

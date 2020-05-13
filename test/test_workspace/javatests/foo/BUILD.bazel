@@ -9,7 +9,7 @@ kt_jvm_test(
     deps = [
         "//java/foo",
         "@maven//junit",
-        "@maven//org/jetbrains/kotlin:kotlin_test",
+        "@maven//org/jetbrains/kotlin:kotlin-test",
     ],
 )
 
