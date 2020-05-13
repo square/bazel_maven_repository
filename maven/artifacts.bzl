@@ -7,6 +7,7 @@ _supported_jvm_artifact_packaging = [
     "jar",
     "aar",
 ]
+
 # All supported artifact types (Can be extended for non-jvm packaging types.)
 _supported_artifact_packaging = _supported_jvm_artifact_packaging
 
@@ -35,6 +36,7 @@ def _parse_spec(artifact_spec):
 
     return struct(
         original_spec = artifact_spec,
+        coordinate = "%s:%s" % (group_id, artifact_id),
         group_id = group_id,
         artifact_id = artifact_id,
         packaging = packaging,
@@ -45,18 +47,19 @@ def _parse_spec(artifact_spec):
 def _munge_target(artifact_id):
     return artifact_id.replace("-", "_").replace(".", "_")
 
-# Builds an annotated struct from a more basic artifact struct, with standard paths, names, and other values
-# derived from the basic artifact spec elements.
+# Builds an annotated struct from a more basic artifact struct, with standard paths, names, and
+# other values derived from the basic artifact spec elements.
 def _annotate_artifact(artifact):
     if not bool(artifact.version):
         fail("Error, no version specified for %s:%s" % (artifact.group_id, artifact.artifact_id))
+
     # assemble paths and target names and such.
     group_elements = artifact.group_id.split(".")
     artifact_id_munged = _munge_target(artifact.artifact_id)
     munged_classifier_if_present = (artifact.classifier.split("-") if artifact.classifier else [])
     maven_target_elements = group_elements + [artifact_id_munged] + munged_classifier_if_present
     maven_target_name = "_".join(maven_target_elements)
-    suffix = artifact.packaging # TODO(cgruber) support better packaging mapping, to handle .bundles etc.
+    suffix = artifact.packaging  # TODO(cgruber) support better packaging mapping, to handle .bundles etc.
     group_path = "/".join(group_elements)
     if bool(artifact.classifier):
         path = None if not bool(artifact.version) else _artifact_template_with_classifier.format(
@@ -86,6 +89,7 @@ def _annotate_artifact(artifact):
         group_path = group_path,
         pom = pom,
         original_spec = artifact.original_spec,
+        coordinate = artifact.coordinate,
         group_id = artifact.group_id,
         artifact_id = artifact.artifact_id,
         packaging = artifact.packaging,

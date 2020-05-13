@@ -32,7 +32,9 @@ artifact_config_properties = struct(
     SHA256 = "sha256",
     INSECURE = "insecure",
     BUILD_SNIPPET = "build_snippet",
-    values = ["sha256", "insecure", "build_snippet"],
+    TESTONLY = "testonly",
+    EXCLUDE = "exclude",
+    values = ["sha256", "insecure", "build_snippet", "testonly", "exclude"],
 )
 
 _DOWNLOAD_PREFIX = "maven"
@@ -77,7 +79,6 @@ filegroup(
 )
 
 """
-
 
 def _fetch_artifact_impl(ctx):
     repository_root_path = ctx.path(".")
@@ -124,11 +125,10 @@ load("@{maven_rules_repository}//maven:maven.bzl", "maven_jvm_artifact")
 
 _MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
     name = "{target}",
-    artifact = "{artifact_coordinates}",{use_jetifier}
-    deps = [{deps}]
+    artifact = "{spec}",{use_jetifier}
+    deps = [{deps}],{testonly}
 )
 """
-
 
 _MAVEN_REPO_AAR_TARGET_TEMPLATE = """
 load("@build_bazel_rules_android//android:rules.bzl", "android_library"){jetify_import}
@@ -151,16 +151,16 @@ android_library(
     assets = ["{aar_repo}:assets"],
     assets_dir = "assets",
     deps = [":{target}_jar"] + [{deps}],
+    testonly = {testonly}
 )
 """
 
-_AAR_JETIFY_TEMPLATE =  """
+_AAR_JETIFY_TEMPLATE = """
 jetify(
   name = "{target}_jetified",
   srcs = ["{aar_repo}:classes.jar"],
 )
 """
-
 
 def _convert_maven_dep(repo_name, artifact):
     group_path = artifact.group_id.replace(".", "/")
@@ -216,8 +216,19 @@ def _get_effective_pom(inheritance_chain):
 def _get_dependencies_from_pom_files(ctx, artifact, fetched):
     inheritance_chain = _get_inheritance_chain(ctx, _fetch_pom(ctx, artifact, fetched), fetched)
     project = _get_effective_pom(inheritance_chain)
-    maven_deps = poms.extract_dependencies(project)
+    maven_deps = [
+        d
+        for d in poms.extract_dependencies(project)
+        if not _maybe_exclude_artifact(d, ctx.attr.deps_excludes.get(artifact.coordinate))
+    ]
     return maven_deps
+
+def _maybe_exclude_artifact(artifact, excludes):
+    if excludes:
+        for ex in excludes:
+            if artifact.coordinate == ex:
+                return True
+    return False
 
 def _deps_string(bazel_deps):
     if not bool(bazel_deps):
@@ -263,14 +274,15 @@ def _extract_android_package(ctx, manifest):
 
     return pkg
 
-def _aar_template_params(ctx, artifact, deps, manifest, should_jetify):
+def _aar_template_params(ctx, artifact, deps, manifest, should_jetify, testonly):
     aar_repo = "@%s//%s" % (artifact.maven_target_name, _DOWNLOAD_PREFIX)
     params = {
         "aar_repo": aar_repo,
-        "package" : _extract_android_package(ctx, manifest),
-        "deps" : _deps_string(deps),
-        "target" : artifact.third_party_target_name,
+        "package": _extract_android_package(ctx, manifest),
+        "deps": _deps_string(deps),
+        "target": artifact.third_party_target_name,
         "maven_rules_repository": ctx.attr.maven_rules_repository,
+        "testonly": testonly,
     }
     params.update(_aar_jars(ctx, artifact.third_party_target_name, aar_repo, should_jetify))
     return params
@@ -278,12 +290,11 @@ def _aar_template_params(ctx, artifact, deps, manifest, should_jetify):
 def _aar_jars(ctx, target, aar_repo, should_jetify):
     if should_jetify:
         return {
-            "jetify_import":
-                "\nload(\"@{maven_rules_repository}//maven:jetifier.bzl\", \"jetify\")".format(
-                    maven_rules_repository = ctx.attr.maven_rules_repository
-                ),
+            "jetify_import": "\nload(\"@{maven_rules_repository}//maven:jetifier.bzl\", \"jetify\")".format(
+                maven_rules_repository = ctx.attr.maven_rules_repository,
+            ),
             "jetify": _AAR_JETIFY_TEMPLATE.format(target = target, aar_repo = aar_repo),
-            "classes": " \":{target}_jetified\"".format(target = target)
+            "classes": " \":{target}_jetified\"".format(target = target),
         }
     return {
         "jetify_import": "",
@@ -293,6 +304,7 @@ def _aar_jars(ctx, target, aar_repo, should_jetify):
 
 def _generate_maven_repository_impl(ctx):
     fetched = {}
+
     # Generate the root WORKSPACE file
     repository_root_path = ctx.path(".")
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
@@ -304,6 +316,7 @@ def _generate_maven_repository_impl(ctx):
 
     # Generate the per-group_id BUILD.bazel files.
     jetifier_excludes = jetify_utils.prepare_jetifier_excludes(ctx)
+    testonly_artifacts = sets.copy_of(ctx.attr.testonly_artifacts)
     build_snippets = ctx.attr.build_snippets
     target_substitutes = dicts.decode_nested(ctx.attr.dependency_target_substitutes)
     processed_artifacts = sets.new()
@@ -316,7 +329,7 @@ def _generate_maven_repository_impl(ctx):
     for group_id, specs_list in ctx.attr.grouped_artifacts.items():
         current_count += 1
         package_target_substitutes = target_substitutes.get(group_id, {})
-        ctx.report_progress("[{current}/{total}] Generating build details for artifacts in {group_id}".format(group_id = group_id, current=current_count, total=total_count))
+        ctx.report_progress("[{current}/{total}] Generating build details for artifacts in {group_id}".format(group_id = group_id, current = current_count, total = total_count))
         specs = sets.copy_of(specs_list)
         prefix = _MAVEN_REPO_BUILD_PREFIX.format(
             group_id = group_id,
@@ -326,9 +339,8 @@ def _generate_maven_repository_impl(ctx):
         group_path = group_id.replace(".", "/")
         for spec in specs:
             artifact = artifacts.annotate(artifacts.parse_spec(spec))
-            coordinates = "%s:%s" % (artifact.group_id, artifact.artifact_id)
-            sets.add(processed_artifacts, coordinates)
-            snippet = build_snippets.get(coordinates, None)
+            sets.add(processed_artifacts, artifact.coordinate)
+            snippet = build_snippets.get(artifact.coordinate, None)
             if snippet:
                 target_definitions.append(snippet)
             else:
@@ -352,17 +364,20 @@ def _generate_maven_repository_impl(ctx):
                         list(unregistered_deps),
                     ))
                 use_jetifier = jetify_utils.should_use_jetifier(
-                    coordinates = coordinates,
+                    coordinate = artifact.coordinate,
                     enabled = ctx.attr.use_jetifier,
                     excludes = jetifier_excludes,
                 )
+                testonly = sets.contains(testonly_artifacts, artifact.coordinate)
                 if artifact.packaging == "aar":
                     aar_params = _aar_template_params(
                         ctx,
                         artifact,
                         normalized_deps,
                         manifests[artifact.maven_target_name],
-                        use_jetifier)
+                        use_jetifier,
+                        testonly,
+                    )
                     target_definitions.append(
                         _MAVEN_REPO_AAR_TARGET_TEMPLATE.format(**aar_params),
                     )
@@ -371,8 +386,9 @@ def _generate_maven_repository_impl(ctx):
                         _MAVEN_REPO_TARGET_TEMPLATE.format(
                             target = artifact.third_party_target_name,
                             deps = _deps_string(normalized_deps),
-                            artifact_coordinates = artifact.original_spec,
-                            use_jetifier = "\n    use_jetifier = True," if use_jetifier else ""
+                            spec = artifact.original_spec,
+                            use_jetifier = "\n    use_jetifier = True," if use_jetifier else "",
+                            testonly = "\n    testonly = True," if testonly else "",
                         ),
                     )
         file = "%s/BUILD.bazel" % group_path
@@ -389,7 +405,9 @@ _generate_maven_repository = repository_rule(
         "build_snippets": attr.string_dict(mandatory = True),
         "use_jetifier": attr.bool(default = False),
         "jetifier_excludes": attr.string_list(mandatory = True),
-        "manifests" : attr.label_list()
+        "manifests": attr.label_list(),
+        "testonly_artifacts": attr.string_list(mandatory = True),
+        "deps_excludes": attr.string_list_dict(mandatory = True),
     },
 )
 
@@ -520,6 +538,8 @@ def _maven_repository_specification(
     _check_for_duplicates(artifact_declarations)
     grouped_artifacts = {}
     build_snippets = {}
+    testonly_artifacts = []
+    deps_excludes = {}
     manifests = []
     for artifact_spec, properties in artifact_declarations.items():
         artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
@@ -541,7 +561,11 @@ def _maven_repository_specification(
             manifests.append("@%s//%s:AndroidManifest.xml" % (artifact.maven_target_name, _DOWNLOAD_PREFIX))
         snippet = properties.get(artifact_config_properties.BUILD_SNIPPET, None)
         if bool(snippet):
-            build_snippets["%s:%s" % (artifact.group_id, artifact.artifact_id)] = snippet
+            build_snippets[artifact.coordinate] = snippet
+        if properties.get(artifact_config_properties.TESTONLY):
+            testonly_artifacts += [artifact.coordinate]
+        if properties.get(artifact_config_properties.EXCLUDE):
+            deps_excludes[artifact.coordinate] = properties.get(artifact_config_properties.EXCLUDE)
 
     # Skylark rules can't take in arbitrarily deep dicts, so we rewrite dict(string->dict(string, string)) to an
     # encoded (but trivially splittable) dict(string->list(string)).  Yes it's gross.
@@ -556,6 +580,8 @@ def _maven_repository_specification(
         use_jetifier = use_jetifier,
         jetifier_excludes = jetifier_excludes,
         manifests = manifests,
+        testonly_artifacts = testonly_artifacts,
+        deps_excludes = deps_excludes,
     )
 
 for_testing = struct(
@@ -617,8 +643,7 @@ def maven_repository_specification(
         jetifier_excludes = DEFAULT_JETIFIER_EXCLUDED_ARTIFACTS,
 
         # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
-        repository_urls = ["https://repo1.maven.org/maven2"],
-    ):
+        repository_urls = ["https://repo1.maven.org/maven2"]):
     # Define repository rule for the jetifier tooling
     if (use_jetifier):
         jetifier_init()

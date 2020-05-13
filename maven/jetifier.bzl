@@ -232,11 +232,11 @@ def _prepare_jetifier_excludes(ctx):
         prefix_matches = prefix_matches,
     )
 
-def _should_use_jetifier(coordinates, enabled, excludes):
-    (group_id, artifact_id) = coordinates.split(":")
+def _should_use_jetifier(coordinate, enabled, excludes):
+    (group_id, artifact_id) = coordinate.split(":")
     should = (
         enabled and
-        not sets.contains(excludes.literal, coordinates) and
+        not sets.contains(excludes.literal, coordinate) and
         not sets.contains(excludes.group_literal, group_id) and
         not sets.contains(excludes.id_literal, artifact_id)
     )

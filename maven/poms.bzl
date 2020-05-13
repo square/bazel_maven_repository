@@ -59,7 +59,7 @@ def _process_dependency(dep_node):
     # TODO: Respect use_jetifier from `maven.bzl`
     coordinate = "%s:%s" % (group_id, artifact_id)
     if coordinate in JETIFIER_ARTIFACT_MAPPING:
-        group_id, artifact_id = JETIFIER_ARTIFACT_MAPPING[coordinate].split(':')
+        group_id, artifact_id = JETIFIER_ARTIFACT_MAPPING[coordinate].split(":")
         version = "unspecified"
 
     return _dependency(
@@ -195,6 +195,7 @@ def _process_parent(dep_node):
         version = version,
         packaging = "pom",  # Parent POMs must be pure metadata artifacts (only a .pom, no .jar/.aar, etc.)
         original_spec = "%s:%s:%s:pom" % (group_id, artifact_id, version),
+        coordinate = "%s:%s" % (group_id, artifact_id),
         classifier = None,
     )
 
