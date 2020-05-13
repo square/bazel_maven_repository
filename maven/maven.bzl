@@ -128,6 +128,8 @@ _MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
     artifact = "{spec}",{use_jetifier}
     deps = [{deps}],{testonly}
 )
+
+{alias}
 """
 
 _MAVEN_REPO_AAR_TARGET_TEMPLATE = """
@@ -153,6 +155,8 @@ android_library(
     deps = [":{target}_jar"] + [{deps}],
     testonly = {testonly}
 )
+
+{alias}
 """
 
 _AAR_JETIFY_TEMPLATE = """
@@ -161,6 +165,8 @@ jetify(
   srcs = ["{aar_repo}:classes.jar"],
 )
 """
+
+_LEGACY_ALIAS_TEMPLATE = """alias(name = "{alias}", actual = "{actual}")"""
 
 def _convert_maven_dep(repo_name, artifact):
     group_path = artifact.group_id.replace(".", "/")
@@ -274,7 +280,7 @@ def _extract_android_package(ctx, manifest):
 
     return pkg
 
-def _aar_template_params(ctx, artifact, deps, manifest, should_jetify, testonly):
+def _aar_template_params(ctx, artifact, deps, manifest, should_jetify, testonly, alias):
     aar_repo = "@%s//%s" % (artifact.maven_target_name, _DOWNLOAD_PREFIX)
     params = {
         "aar_repo": aar_repo,
@@ -283,6 +289,7 @@ def _aar_template_params(ctx, artifact, deps, manifest, should_jetify, testonly)
         "target": artifact.third_party_target_name,
         "maven_rules_repository": ctx.attr.maven_rules_repository,
         "testonly": testonly,
+        "alias": alias,
     }
     params.update(_aar_jars(ctx, artifact.third_party_target_name, aar_repo, should_jetify))
     return params
@@ -304,7 +311,6 @@ def _aar_jars(ctx, target, aar_repo, should_jetify):
 
 def _generate_maven_repository_impl(ctx):
     fetched = {}
-
     # Generate the root WORKSPACE file
     repository_root_path = ctx.path(".")
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
@@ -369,6 +375,7 @@ def _generate_maven_repository_impl(ctx):
                     excludes = jetifier_excludes,
                 )
                 testonly = sets.contains(testonly_artifacts, artifact.coordinate)
+                underscore_alias = _underscore_alias(ctx.attr.legacy_underscore, artifact)
                 if artifact.packaging == "aar":
                     aar_params = _aar_template_params(
                         ctx,
@@ -377,6 +384,7 @@ def _generate_maven_repository_impl(ctx):
                         manifests[artifact.maven_target_name],
                         use_jetifier,
                         testonly,
+                        alias = underscore_alias,
                     )
                     target_definitions.append(
                         _MAVEN_REPO_AAR_TARGET_TEMPLATE.format(**aar_params),
@@ -389,17 +397,30 @@ def _generate_maven_repository_impl(ctx):
                             spec = artifact.original_spec,
                             use_jetifier = "\n    use_jetifier = True," if use_jetifier else "",
                             testonly = "\n    testonly = True," if testonly else "",
+                            alias = underscore_alias,
                         ),
                     )
         file = "%s/BUILD.bazel" % group_path
         content = "\n".join([prefix] + target_definitions)
         ctx.file(file, content)
 
+def _underscore_alias(enabled, artifact):
+    if not enabled:
+        return ""
+    alias = artifact.third_party_target_name.replace("-", "_")
+    if alias == artifact.third_party_target_name:
+        return ""
+    return _LEGACY_ALIAS_TEMPLATE.format(
+        alias = alias,
+        actual = ":%s" % artifact.third_party_target_name,
+    )
+
 _generate_maven_repository = repository_rule(
     implementation = _generate_maven_repository_impl,
     attrs = {
         "grouped_artifacts": attr.string_list_dict(mandatory = True),
         "repository_urls": attr.string_list(mandatory = True),
+        "legacy_underscore": attr.bool(default = False),
         "maven_rules_repository": attr.string(mandatory = False, default = "maven_repository_rules"),
         "dependency_target_substitutes": attr.string_list_dict(mandatory = True),
         "build_snippets": attr.string_dict(mandatory = True),
@@ -521,6 +542,7 @@ def _maven_repository_specification(
         name,
         use_jetifier,
         jetifier_excludes,
+        legacy_underscore,
         artifact_declarations = {},
         insecure_artifacts = [],
         build_substitutes = {},
@@ -580,6 +602,7 @@ def _maven_repository_specification(
         use_jetifier = use_jetifier,
         jetifier_excludes = jetifier_excludes,
         manifests = manifests,
+        legacy_underscore = legacy_underscore,
         testonly_artifacts = testonly_artifacts,
         deps_excludes = deps_excludes,
     )
@@ -627,6 +650,8 @@ def maven_repository_specification(
         # DEPRECATED: Please use artifacts with an "insecure = true" property.
         insecure_artifacts = [],
 
+        legacy_underscore = False,
+
         # The dictionary of build-file substitutions (per-target) which will replace the auto-generated target
         # statements in the generated repository
         build_substitutes = {},
@@ -654,6 +679,7 @@ def maven_repository_specification(
         name = name,
         artifact_declarations = artifacts,
         insecure_artifacts = insecure_artifacts,
+        legacy_underscore = legacy_underscore,
         build_substitutes = build_substitutes,
         dependency_target_substitutes = dependency_target_substitutes,
         use_jetifier = use_jetifier,

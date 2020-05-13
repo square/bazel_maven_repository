@@ -56,7 +56,9 @@ maven_repository_specification(
         # This is the proper way to specify an artifact.  It contains the artifact, plus a configuration dictionary.
         # The config dictionary contains a sha256 hash. This both ensures the file downloaded is the expected one, but
         # also caches the file in bazel's "content addressable" cache, which survives build clean.
-        "com.google.guava:guava:25.0-jre": {"sha256": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9"},
+        "com.google.guava:guava:25.0-jre": {
+            "sha256": "3fd4341776428c7e0e5c18a7c10de129475b69ab9d30aeafbb5c277bb6074fa9"
+        },
         "com.google.dagger:dagger:2.20": {
             "sha256": "d37a556d8d57e2428c20e222b95346512d11fcf2174d581489a69a1439b886fb",
             "build_snippet": DAGGER_BUILD_SNIPPET_WITH_PLUGIN.format(version = "2.20"),
@@ -82,14 +84,11 @@ maven_repository_specification(
         "junit:junit:4.13": {
             "insecure": True,
             "testonly": True,
+            "exclude": ["org.hamcrest:hamcrest-core"],
         },
         "com.google.errorprone:error_prone_annotations:2.1.3": {"insecure": True},
         "com.google.j2objc:j2objc-annotations:1.1": {"insecure": True},
         "org.codehaus.mojo:animal-sniffer-annotations:1.14": {"insecure": True},
-        "org.hamcrest:hamcrest-core:1.3": {
-            "insecure": True,
-            "testonly": True,
-        },
         "org.jetbrains:annotations:13.0": {"insecure": True},
         "org.jetbrains.kotlin:kotlin-test:%s" % KOTLIN_VERSION: {"insecure": True},
         "org.jetbrains.kotlin:kotlin-test-common:%s" % KOTLIN_VERSION: {"insecure": True},
@@ -119,7 +118,7 @@ maven_repository_specification(
         # annotation processor) we need to rewrite the internal dependencies inside the com/google/dagger package
         # to reflect this.
         # "groupId": { "full bazel target": "full alternate target" }
-        "com.google.dagger": {"@maven//com/google/dagger:dagger": "@maven//com/google/dagger:dagger_api"},
+        "com.google.dagger": {"@maven//com/google/dagger:dagger": "@maven//com/google/dagger:dagger-api"},
     },
     jetifier_excludes = [
         "androidx.*:*",
@@ -144,6 +143,7 @@ maven_repository_specification(
         "https://dl.google.com/dl/android/maven2",
     ],
     use_jetifier = True,
+    legacy_underscore = True,
 )
 
 # Set up the standard android SDK repository, upon which depend a lot of the android tooling in bazel.

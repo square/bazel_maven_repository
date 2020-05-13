@@ -45,7 +45,7 @@ def _parse_spec(artifact_spec):
     )
 
 def _munge_target(artifact_id):
-    return artifact_id.replace("-", "_").replace(".", "_")
+    return artifact_id.replace(".", "_")
 
 # Builds an annotated struct from a more basic artifact struct, with standard paths, names, and
 # other values derived from the basic artifact spec elements.
