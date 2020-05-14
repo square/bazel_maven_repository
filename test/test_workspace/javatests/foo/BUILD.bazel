@@ -20,5 +20,6 @@ java_test(
         "//java/foo",
         "@maven//com/google/truth",
         "@maven//junit",
+        "@maven//org/checkerframework:checker-qual",
     ],
 )

@@ -6,4 +6,5 @@ import foo.Foo
 fun useCore() {
   val view: ViewCompat? = null
   val foo = Foo()
+  foo.toString()
 }

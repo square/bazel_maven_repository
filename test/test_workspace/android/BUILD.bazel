@@ -3,12 +3,21 @@ load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kt_android_library")
 package(default_visibility = ["//:__subpackages__"])
 
 kt_android_library(
-    name = "android",
-    custom_package = "android.blah",
+    name = "library",
     srcs = ["src/main/java/blah/Blah.kt"],
+    custom_package = "android.blah",
     manifest = "src/main/AndroidManifest.xml",
+    resource_files = glob(["src/main/res/**"]),
     deps = [
         "//java/foo",
-        "@maven//androidx/core"
+        "@maven//androidx/core",
     ],
+)
+
+android_binary(
+    name = "app",
+    custom_package = "android.blah",
+    manifest = "src/main/AndroidManifest.xml",
+    multidex = "native",
+    deps = [":library"],
 )

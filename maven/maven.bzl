@@ -23,7 +23,6 @@ load(
     ":jetifier.bzl",
     "DEFAULT_JETIFIER_EXCLUDED_ARTIFACTS",
     "jetifier_init",
-    "jetify",
     "jetify_utils",
 )
 
@@ -119,54 +118,48 @@ _fetch_artifact = repository_rule(
 )
 
 _MAVEN_REPO_BUILD_PREFIX = """# Generated bazel build file for maven group {group_id}
+load("@{repo}//maven:jvm.bzl", "raw_jvm_import")"""
 
-load("@{maven_rules_repository}//maven:maven.bzl", "maven_jvm_artifact")
-"""
+_ANDROID_LOAD_PREFIX = """load("@build_bazel_rules_android//android:rules.bzl", "android_library")"""
 
-_MAVEN_REPO_TARGET_TEMPLATE = """maven_jvm_artifact(
+_LEGACY_LOAD_PREFIX = """load("@{repo}//maven:maven.bzl", "maven_jvm_artifact")"""
+
+_LEGACY_ALIAS_TEMPLATE = """alias(name = "{alias}", actual = "{actual}")"""
+
+_MAVEN_REPO_JVM_TARGET_TEMPLATE = """
+# {spec}
+raw_jvm_import(
     name = "{target}",
-    artifact = "{spec}",{use_jetifier}
+    jar = "{fetch_repo}:{path}",{use_jetifier}
     deps = [{deps}],{testonly}
+    visibility = {visibility}
 )
 
 {alias}
 """
 
 _MAVEN_REPO_AAR_TARGET_TEMPLATE = """
-load("@build_bazel_rules_android//android:rules.bzl", "android_library"){jetify_import}
-load("@{maven_rules_repository}//maven:jvm.bzl", "raw_jvm_import")
-
-{jetify}
+# {spec} raw classes
 raw_jvm_import(
-    name = "{target}_jar",
-    jar = {classes},
-    deps = [{deps}
-    ],
+    name = "{target}_classes",
+    jar = "{fetch_repo}:classes.jar",{use_jetifier}
+    deps = [{deps}],
 )
 
+# {spec} library target
 android_library(
     name = "{target}",
-    manifest = "{aar_repo}:AndroidManifest.xml",
+    manifest = "{fetch_repo}:AndroidManifest.xml",
     custom_package = "{package}",
-    visibility = ["//visibility:public"],
-    resource_files = ["{aar_repo}:resources"],
-    assets = ["{aar_repo}:assets"],
+    visibility = {visibility},
+    resource_files = ["{fetch_repo}:resources"],
+    assets = ["{fetch_repo}:assets"],
     assets_dir = "assets",
-    deps = [":{target}_jar"] + [{deps}],
-    testonly = {testonly}
+    deps = [":{target}_classes"] + [{deps}],{testonly}
 )
 
 {alias}
 """
-
-_AAR_JETIFY_TEMPLATE = """
-jetify(
-  name = "{target}_jetified",
-  srcs = ["{aar_repo}:classes.jar"],
-)
-"""
-
-_LEGACY_ALIAS_TEMPLATE = """alias(name = "{alias}", actual = "{actual}")"""
 
 def _convert_maven_dep(repo_name, artifact):
     group_path = artifact.group_id.replace(".", "/")
@@ -240,7 +233,7 @@ def _deps_string(bazel_deps):
     if not bool(bazel_deps):
         return ""
     bazel_deps = ["""        "%s",""" % x for x in bazel_deps]
-    return "\n%s" % "\n".join(bazel_deps) if bool(bazel_deps) else ""
+    return "\n%s\n    " % "\n".join(bazel_deps) if bool(bazel_deps) else ""
 
 def _should_include_dependency(dep):
     return (
@@ -280,37 +273,9 @@ def _extract_android_package(ctx, manifest):
 
     return pkg
 
-def _aar_template_params(ctx, artifact, deps, manifest, should_jetify, testonly, alias):
-    aar_repo = "@%s//%s" % (artifact.maven_target_name, _DOWNLOAD_PREFIX)
-    params = {
-        "aar_repo": aar_repo,
-        "package": _extract_android_package(ctx, manifest),
-        "deps": _deps_string(deps),
-        "target": artifact.third_party_target_name,
-        "maven_rules_repository": ctx.attr.maven_rules_repository,
-        "testonly": testonly,
-        "alias": alias,
-    }
-    params.update(_aar_jars(ctx, artifact.third_party_target_name, aar_repo, should_jetify))
-    return params
-
-def _aar_jars(ctx, target, aar_repo, should_jetify):
-    if should_jetify:
-        return {
-            "jetify_import": "\nload(\"@{maven_rules_repository}//maven:jetifier.bzl\", \"jetify\")".format(
-                maven_rules_repository = ctx.attr.maven_rules_repository,
-            ),
-            "jetify": _AAR_JETIFY_TEMPLATE.format(target = target, aar_repo = aar_repo),
-            "classes": " \":{target}_jetified\"".format(target = target),
-        }
-    return {
-        "jetify_import": "",
-        "jetify": "",
-        "classes": "\"{aar_repo}:classes.jar\"".format(aar_repo = aar_repo),
-    }
-
 def _generate_maven_repository_impl(ctx):
     fetched = {}
+
     # Generate the root WORKSPACE file
     repository_root_path = ctx.path(".")
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
@@ -337,17 +302,16 @@ def _generate_maven_repository_impl(ctx):
         package_target_substitutes = target_substitutes.get(group_id, {})
         ctx.report_progress("[{current}/{total}] Generating build details for artifacts in {group_id}".format(group_id = group_id, current = current_count, total = total_count))
         specs = sets.copy_of(specs_list)
-        prefix = _MAVEN_REPO_BUILD_PREFIX.format(
-            group_id = group_id,
-            maven_rules_repository = ctx.attr.maven_rules_repository,
-        )
         target_definitions = []
+        add_legacy_prefix = False
+        add_android_prefix = False
         group_path = group_id.replace(".", "/")
         for spec in specs:
             artifact = artifacts.annotate(artifacts.parse_spec(spec))
             sets.add(processed_artifacts, artifact.coordinate)
             snippet = build_snippets.get(artifact.coordinate, None)
             if snippet:
+                add_legacy_prefix = True  # In case manual snippets have the older maven_jvm_artifact
                 target_definitions.append(snippet)
             else:
                 maven_deps = _get_dependencies_from_pom_files(ctx, artifact, fetched)
@@ -358,6 +322,7 @@ def _generate_maven_repository_impl(ctx):
                     found_artifacts[dep.coordinate] = dep
                     bazel_deps += [_convert_maven_dep(ctx.attr.name, dep)]
                 normalized_deps = [_normalize_target(x, group_path, package_target_substitutes) for x in bazel_deps]
+                normalized_deps = sorted(normalized_deps)
                 unregistered = sets.difference(processed_artifacts, sets.copy_of(found_artifacts))
                 if bool(unregistered):
                     unregistered_deps = [
@@ -369,39 +334,56 @@ def _generate_maven_repository_impl(ctx):
                         spec,
                         list(unregistered_deps),
                     ))
-                use_jetifier = jetify_utils.should_use_jetifier(
+                use_jetifier = "\n    jetify = True," if jetify_utils.should_use_jetifier(
                     coordinate = artifact.coordinate,
                     enabled = ctx.attr.use_jetifier,
                     excludes = jetifier_excludes,
-                )
-                testonly = sets.contains(testonly_artifacts, artifact.coordinate)
+                ) else ""
+                testonly = "\n    testonly = True," if sets.contains(
+                    testonly_artifacts,
+                    artifact.coordinate,
+                ) else ""
                 underscore_alias = _underscore_alias(ctx.attr.legacy_underscore, artifact)
+                fetch_repo = "@%s//%s" % (artifact.maven_target_name, _DOWNLOAD_PREFIX)
+                visibility = ["//visibility:public"]
                 if artifact.packaging == "aar":
-                    aar_params = _aar_template_params(
-                        ctx,
-                        artifact,
-                        normalized_deps,
-                        manifests[artifact.maven_target_name],
-                        use_jetifier,
-                        testonly,
-                        alias = underscore_alias,
-                    )
+                    add_android_prefix = True
+                    manifest = manifests[artifact.maven_target_name]
                     target_definitions.append(
-                        _MAVEN_REPO_AAR_TARGET_TEMPLATE.format(**aar_params),
+                        _MAVEN_REPO_AAR_TARGET_TEMPLATE.format(
+                            spec = artifact.original_spec,
+                            target = artifact.third_party_target_name,
+                            deps = _deps_string(normalized_deps),
+                            fetch_repo = fetch_repo,
+                            package = _extract_android_package(ctx, manifest),
+                            use_jetifier = use_jetifier,
+                            testonly = testonly,
+                            alias = underscore_alias,
+                            visibility = visibility,
+                        ),
                     )
                 else:
                     target_definitions.append(
-                        _MAVEN_REPO_TARGET_TEMPLATE.format(
+                        _MAVEN_REPO_JVM_TARGET_TEMPLATE.format(
+                            spec = artifact.original_spec,
                             target = artifact.third_party_target_name,
                             deps = _deps_string(normalized_deps),
-                            spec = artifact.original_spec,
-                            use_jetifier = "\n    use_jetifier = True," if use_jetifier else "",
-                            testonly = "\n    testonly = True," if testonly else "",
+                            fetch_repo = fetch_repo,
+                            path = artifact.path,
+                            use_jetifier = use_jetifier,
+                            testonly = testonly,
                             alias = underscore_alias,
+                            visibility = visibility,
                         ),
                     )
         file = "%s/BUILD.bazel" % group_path
-        content = "\n".join([prefix] + target_definitions)
+        repo = ctx.attr.maven_rules_repository
+        content = "\n".join(
+            [_MAVEN_REPO_BUILD_PREFIX.format(group_id = group_id, repo = repo)] +
+            ([_ANDROID_LOAD_PREFIX] if add_android_prefix else []) +
+            ([_LEGACY_LOAD_PREFIX.format(repo = repo)] if add_legacy_prefix else []) +
+            target_definitions,
+        )
         ctx.file(file, content)
 
 def _underscore_alias(enabled, artifact):
@@ -434,23 +416,22 @@ _generate_maven_repository = repository_rule(
 
 # Implementation of the maven_jvm_artifact rule.
 def _maven_jvm_artifact(artifact_spec, name, visibility, deps = [], use_jetifier = False, **kwargs):
+    print("WARNING: maven_jvm_artifact is deprecated, please use raw_jvm_import")
     artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
-    maven_target = "@%s//%s:%s" % (artifact.maven_target_name, _DOWNLOAD_PREFIX, artifact.path)
+    file_target = "@%s//%s:%s" % (artifact.maven_target_name, _DOWNLOAD_PREFIX, artifact.path)
     import_target = artifact.maven_target_name + "_import"
     target_name = name if name else artifact.third_party_target_name
     coordinate = "%s:%s" % (artifact.group_id, artifact.artifact_id)
 
-    if use_jetifier:
-        target = target_name + "_jetified"
-        jetify(
-            name = target,
-            srcs = [maven_target],
-        )
-    else:
-        target = maven_target
-
     if artifact.packaging == "jar":
-        raw_jvm_import(name = target_name, deps = deps, visibility = visibility, jar = target, **kwargs)
+        raw_jvm_import(
+            name = target_name,
+            deps = deps,
+            visibility = visibility,
+            jar = file_target,
+            jetify = use_jetifier,
+            **kwargs
+        )
     else:
         fail("Packaging %s not supported by maven_jvm_artifact." % artifact.packaging)
 
@@ -649,7 +630,6 @@ def maven_repository_specification(
         # The list of artifacts (without sha256 hashes) that will be used without file hash checking.
         # DEPRECATED: Please use artifacts with an "insecure = true" property.
         insecure_artifacts = [],
-
         legacy_underscore = False,
 
         # The dictionary of build-file substitutions (per-target) which will replace the auto-generated target
