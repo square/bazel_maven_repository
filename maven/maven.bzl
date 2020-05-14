@@ -124,7 +124,11 @@ _ANDROID_LOAD_PREFIX = """load("@build_bazel_rules_android//android:rules.bzl", 
 
 _LEGACY_LOAD_PREFIX = """load("@{repo}//maven:maven.bzl", "maven_jvm_artifact")"""
 
-_LEGACY_ALIAS_TEMPLATE = """alias(name = "{alias}", actual = "{actual}")"""
+_LEGACY_ALIAS_TEMPLATE = """alias(
+    name = "{alias}",
+    actual = "{actual}",
+    visibility = {visibility},
+)"""
 
 _MAVEN_REPO_JVM_TARGET_TEMPLATE = """
 # {spec}
@@ -343,9 +347,13 @@ def _generate_maven_repository_impl(ctx):
                     testonly_artifacts,
                     artifact.coordinate,
                 ) else ""
-                underscore_alias = _underscore_alias(ctx.attr.legacy_underscore, artifact)
+                visibility = """["//visibility:public"]"""
+                underscore_alias = _underscore_alias(
+                    ctx.attr.legacy_underscore,
+                    artifact,
+                    visibility,
+                )
                 fetch_repo = "@%s//%s" % (artifact.maven_target_name, _DOWNLOAD_PREFIX)
-                visibility = ["//visibility:public"]
                 if artifact.packaging == "aar":
                     add_android_prefix = True
                     manifest = manifests[artifact.maven_target_name]
@@ -386,7 +394,7 @@ def _generate_maven_repository_impl(ctx):
         )
         ctx.file(file, content)
 
-def _underscore_alias(enabled, artifact):
+def _underscore_alias(enabled, artifact, visibility):
     if not enabled:
         return ""
     alias = artifact.third_party_target_name.replace("-", "_")
@@ -395,6 +403,7 @@ def _underscore_alias(enabled, artifact):
     return _LEGACY_ALIAS_TEMPLATE.format(
         alias = alias,
         actual = ":%s" % artifact.third_party_target_name,
+        visibility = visibility,
     )
 
 _generate_maven_repository = repository_rule(
