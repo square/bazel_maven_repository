@@ -132,43 +132,24 @@ def jetifier_init():
         build_file_content = BUILD_FILE_CONTENT,
     )
 
-# _jetify_impl and jetify are based on https://github.com/bazelbuild/tools_android/pull/5
+# _jetify_jar based on https://github.com/bazelbuild/tools_android/pull/5
 
-def _jetify_impl(ctx):
-    srcs = ctx.attr.srcs
-    outfiles = []
-    for src in srcs:
-        for artifact in src.files.to_list():
-            jetified_outfile = ctx.actions.declare_file(ctx.attr.name + "_jetified_" + artifact.basename)
-            jetify_args = ctx.actions.args()
-            jetify_args.add_all(["-l", "error"])
-            jetify_args.add_all(["-o", jetified_outfile])
-            jetify_args.add_all(["-i", artifact])
-            ctx.actions.run(
-                mnemonic = "Jetify",
-                inputs = [artifact],
-                outputs = [jetified_outfile],
-                progress_message = "Jetifying {} to create {}.".format(artifact.path, jetified_outfile.path),
-                executable = ctx.executable._jetifier,
-                arguments = [jetify_args],
-                use_default_shell_env = True,
-            )
-            outfiles.append(jetified_outfile)
-
-    return [DefaultInfo(files = depset(outfiles))]
-
-jetify = rule(
-    attrs = {
-        "srcs": attr.label_list(allow_files = [".jar", ".aar"]),
-        "_jetifier": attr.label(
-            executable = True,
-            allow_files = True,
-            default = Label("@bazel_maven_repository_jetifier//:jetifier_standalone"),
-            cfg = "host",
-        ),
-    },
-    implementation = _jetify_impl,
-)
+def _jetify_jar(ctx, jar):
+    jetified_outfile = ctx.actions.declare_file("%s-jetified.%s" % (ctx.attr.name, jar.extension))
+    jetify_args = ctx.actions.args()
+    jetify_args.add_all(["-l", "error"])
+    jetify_args.add_all(["-o", jetified_outfile])
+    jetify_args.add_all(["-i", jar])
+    ctx.actions.run(
+        mnemonic = "Jetify",
+        inputs = [jar],
+        outputs = [jetified_outfile],
+        progress_message = "Jetifying {} to create {}.".format(jar.path, jetified_outfile.path),
+        executable = ctx.executable._jetifier,
+        arguments = [jetify_args],
+        use_default_shell_env = True,
+    )
+    return jetified_outfile
 
 # Literal and glob pattern matches for artifacts that should not have jetifier applied.
 # These can be overridden in the main call using maven_repository_specification(jetifier_excludes=)
@@ -250,6 +231,7 @@ def _should_use_jetifier(coordinate, enabled, excludes):
     return should
 
 jetify_utils = struct(
+    jetify_jar = _jetify_jar,
     should_use_jetifier = _should_use_jetifier,
     prepare_jetifier_excludes = _prepare_jetifier_excludes,
 )

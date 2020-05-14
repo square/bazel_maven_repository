@@ -19,12 +19,13 @@ java_library(
    visibility = ["//visibility:public"],
 )
 
-maven_jvm_artifact(
-   name = "dagger-api",
-   exports = [
+# com.google.dagger:dagger:{version}
+raw_jvm_import(
+    name = "dagger-api",
+    jar = "@com_google_dagger_dagger//maven:com/google/dagger/dagger/{version}/dagger-{version}.jar",
+    deps = [
        "@maven//javax/inject:javax_inject",
-   ],
-   artifact = "com.google.dagger:dagger:{version}",
+    ],
 )
 
 java_plugin(
@@ -42,6 +43,9 @@ java_plugin(
 #   This is similar to the dagger substitution snippet, but the organization between the API target
 #   upon which one is to depend, and the plugin target is a bit different, and we want the resulting
 #   visible target to be different.
+#
+#   Also this uses the older mvn_jvm_artifact mechanism, which is deprecated in favor of the more
+#   explicit raw_jvm_import.
 AUTO_VALUE_BUILD_SNIPPET_WITH_PLUGIN = """
 java_library(
    name = "value",
@@ -50,6 +54,7 @@ java_library(
    visibility = ["//visibility:public"],
 )
 
+# Legacy rule. This should be migrated to raw_jvm_import.
 maven_jvm_artifact(
    name = "auto-value-processor",
    artifact = "com.google.auto.value:auto-value:{version}",

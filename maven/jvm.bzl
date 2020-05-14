@@ -11,6 +11,8 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 
+load(":jetifier.bzl", "jetify_utils")
+
 # Description:
 #   A custom import rule that doesn't return an ijar, instead returning the raw .jar file as
 #   the "compile_jar".  This avoids issues with kotlin and inline functions.  Inspired by
@@ -35,13 +37,14 @@ def _raw_jvm_import(ctx):
     -sources.jar. Found a java library or import instead: %s %s""" % (ctx.attr.jar, jars, source_jars))
     if len(jars) != 1 or len(source_jars) > 1:
         fail("""
-    Supplied jar parameter (%s) transitively included more than one binary jar and one (optional)
+    Supplied jar label (%s) transitively included more than one binary jar and one (optional)
     source jar.  Found: %s, %s""" % (ctx.file.jar, jars, source_jars))
 
+    jars = [jetify_utils.jetify_jar(ctx, jars[0])] if (ctx.attr.jetify) else jars
     default_info = DefaultInfo(
         files = depset(jars),
-        runfiles = ctx.runfiles(jars)
-        )
+        runfiles = ctx.runfiles(jars),
+    )
     java_info = JavaInfo(
         output_jar = jars[0],
         compile_jar = jars[0],
@@ -73,6 +76,13 @@ raw_jvm_import = rule(
             providers = [JavaInfo],
         ),
         "neverlink": attr.bool(default = False),
+        "jetify": attr.bool(default = False),
+        "_jetifier": attr.label(
+            executable = True,
+            allow_files = True,
+            default = Label("@bazel_maven_repository_jetifier//:jetifier_standalone"),
+            cfg = "host",
+        ),
     },
     implementation = _raw_jvm_import,
     provides = [JavaInfo],

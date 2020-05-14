@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest
-    package="bazel.maven.repository.test"
-    />
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    package="android.blah"
+    android:versionCode="1"
+    android:versionName="1.0" >
+  <uses-sdk android:minSdkVersion="24"
+      android:targetSdkVersion="29"
+      android:maxSdkVersion="29" />
+</manifest>
