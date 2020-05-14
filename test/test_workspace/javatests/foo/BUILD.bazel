@@ -19,7 +19,7 @@ java_test(
     deps = [
         "//java/foo",
         "@maven//com/google/truth",
-        "@maven//org/checkerframework:checker-qual",
         "@maven//junit",
+        "@maven//org/checkerframework:checker-qual",
     ],
 )
