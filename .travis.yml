@@ -30,7 +30,9 @@ before_install:
 script:
   - # Test the maven integration's internal unit tests
   - bazel test //...
+  - # Exercise the kramer tool.
+  - (cd kramer && bazel build //...)
+  - (cd kramer && bazel test //...)
   - # Exercise the sample project.
-  - cd test/test_workspace
-  - bazel build //...
-  - bazel test //...
+  - (cd test/test_workspace && bazel build //...)
+  - (cd test/test_workspace && bazel test //...)
