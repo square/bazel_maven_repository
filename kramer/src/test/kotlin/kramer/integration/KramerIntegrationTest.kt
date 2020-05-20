@@ -4,6 +4,7 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.core.subcommands
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import com.squareup.tools.maven.resolution.Repositories.GOOGLE_ANDROID
 import com.squareup.tools.maven.resolution.Repositories.MAVEN_CENTRAL
 import java.io.ByteArrayOutputStream
@@ -14,6 +15,7 @@ import kramer.Kramer
 import kramer.MavenRepo
 import kramer.ResolveOne
 import org.junit.After
+import org.junit.Ignore
 import org.junit.Test
 
 /**
@@ -90,38 +92,39 @@ class KramerIntegrationTest {
   //
   // TODO Fix this or migrate it to a more appropriate performance test enviornment.
   //
-  //  @Test fun largeListOfArtifactsWithCaching() {
-  //    val timingMatcher = "with [0-9]* threads in ([0-9.]*) seconds".toRegex()
-  //
-  //    val output1 = cmd.test(configFlags("large", "gen-maven-repo"))
-  //    val result1 = timingMatcher.find(output1)
-  //    assertWithMessage("Expected to match ${timingMatcher.pattern}").that(result1).isNotNull()
-  //    val time1 = result1!!.groupValues[1].toFloat()
-  //    assertWithMessage("Expected non-cached first run, but run took $time1 seconds")
-  //      .that(time1)
-  //      .isGreaterThan(4.0f)
-  //
-  //    assertThat(Files.exists(cacheDir.resolve("junit/junit/4.13/junit-4.13.pom"))).isTrue()
-  //    val output2 = cmd.test(
-  //      configFlags(
-  //        "large",
-  //        "gen-maven-repo",
-  //        workspace = "workspace2",
-  //        kramerArgs = listOf(
-  //          "--repository=foo|localhost:0", // force fake repo for this run - all cache.
-  //          "--local_maven_cache=$cacheDir"
-  //        )
-  //      )
-  //    )
-  //    val result2 = timingMatcher.find(output2)
-  //    assertWithMessage("Expected to match ${timingMatcher.pattern}").that(result2).isNotNull()
-  //    val time2 = result2!!.groupValues[1].toFloat()
-  //    assertWithMessage("Expected fast cache run but took $time2 seconds")
-  //      .that(time2)
-  //      .isLessThan(3.0f)
-  //
-  //    assertThat(output2).contains("Resolved 469 artifacts with 100 threads in ")
-  //  }
+  @Ignore("This is a performance test, crazy flaky, and not quite right yet.")
+  @Test fun largeListOfArtifactsWithCaching() {
+    val timingMatcher = "with [0-9]* threads in ([0-9.]*) seconds".toRegex()
+
+    val output1 = cmd.test(configFlags("large", "gen-maven-repo"))
+    val result1 = timingMatcher.find(output1)
+    assertWithMessage("Expected to match ${timingMatcher.pattern}").that(result1).isNotNull()
+    val time1 = result1!!.groupValues[1].toFloat()
+    assertWithMessage("Expected non-cached first run, but run took $time1 seconds")
+      .that(time1)
+      .isGreaterThan(4.0f)
+
+    assertThat(Files.exists(cacheDir.resolve("junit/junit/4.13/junit-4.13.pom"))).isTrue()
+    val output2 = cmd.test(
+      configFlags(
+        "large",
+        "gen-maven-repo",
+        workspace = "workspace2",
+        kramerArgs = listOf(
+          "--repository=foo|localhost:0", // force fake repo for this run - all cache.
+          "--local_maven_cache=$cacheDir"
+        )
+      )
+    )
+    val result2 = timingMatcher.find(output2)
+    assertWithMessage("Expected to match ${timingMatcher.pattern}").that(result2).isNotNull()
+    val time2 = result2!!.groupValues[1].toFloat()
+    assertWithMessage("Expected fast cache run but took $time2 seconds")
+      .that(time2)
+      .isLessThan(3.0f)
+
+    assertThat(output2).contains("Resolved 469 artifacts with 100 threads in ")
+  }
 
   private fun configFlags(
     label: String,

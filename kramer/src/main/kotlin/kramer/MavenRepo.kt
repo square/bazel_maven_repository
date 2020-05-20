@@ -9,7 +9,6 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
 import com.github.ajalt.clikt.parameters.types.int
 import com.github.ajalt.clikt.parameters.types.path
-import com.squareup.tools.maven.resolution.Artifact
 import com.squareup.tools.maven.resolution.ArtifactResolver
 import com.squareup.tools.maven.resolution.FetchStatus
 import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.SUCCESSFUL
@@ -19,14 +18,12 @@ import com.squareup.tools.maven.resolution.ResolvedArtifact
 import java.io.IOException
 import java.net.URI
 import java.nio.file.FileSystem
-import java.nio.file.FileSystemAlreadyExistsException
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-import javax.xml.parsers.SAXParserFactory
 import kotlin.system.measureTimeMillis
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -41,9 +38,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
-import org.xml.sax.Attributes
-import org.xml.sax.SAXException
-import org.xml.sax.helpers.DefaultHandler
 
 class MavenRepo(fs: FileSystem = FileSystems.getDefault()) : CliktCommand(name = "gen-maven-repo") {
   private val workspace: Path by option(
@@ -77,7 +71,6 @@ class MavenRepo(fs: FileSystem = FileSystems.getDefault()) : CliktCommand(name =
     val seen = ConcurrentHashMap<String, IndexEntry>()
     val unresolved = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
     val declaredArtifactSlugs = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
-    val issue = ConcurrentHashMap<String, String>()
     val benchmark = measureTimeMillis {
       if (repoConfig.artifacts.isNotEmpty()) Files.createDirectories(workspace)
       runBlocking {
@@ -258,9 +251,9 @@ private fun prepareDependencies(
   config: ArtifactConfig,
   seen: ConcurrentHashMap<String, MavenRepo.IndexEntry>,
   repoConfig: RepoConfig
-): List<String> {
+): Sequence<String> {
   val substitutes = repoConfig.targetSubstitutes.getOrElse(resolved.groupId) { mapOf() }
-  return resolved.model.dependencies
+  return resolved.model.dependencies.asSequence()
     .filter { dep -> dep.scope in acceptedScopes }
     .filter { dep -> "${dep.groupId}:${dep.artifactId}" !in config.exclude }
     .onEach { dep ->
@@ -286,44 +279,4 @@ private fun prepareDependencies(
         }
     }
     .sorted()
-}
-
-@Throws(IOException::class)
-private fun extractPackageFromManifest(fromZip: URI): String? {
-  try {
-    FileSystems.newFileSystem(fromZip, emptyMap<String, Any>())
-  } catch (e: FileSystemAlreadyExistsException) {
-    FileSystems.getFileSystem(fromZip)
-  }
-    .rootDirectories
-    .firstOrNull()
-    ?.let { root: Path ->
-      Files.walk(root)
-        .filter { path -> path.toString() == "/AndroidManifest.xml" }
-        .findFirst()
-        .orElse(null)
-        ?.let { path ->
-          val xmlText = Files.readAllLines(path).joinToString("")
-          val parserFactory = SAXParserFactory.newInstance()
-          // instancing the SAXParser class
-          val saxParser = parserFactory.newSAXParser()
-          var customPackage: String? = null
-          val handler = object : DefaultHandler() {
-            @Throws(SAXException::class)
-            override fun startElement(
-              uri: String,
-              localName: String,
-              qName: String,
-              attributes: Attributes
-            ) {
-              if (qName == "manifest" || localName == "manifest") {
-                customPackage = attributes.getValue("", "package")
-              }
-            }
-          }
-          saxParser.parse(xmlText.byteInputStream(), handler)
-          return customPackage
-        }
-    }
-  return null
 }
