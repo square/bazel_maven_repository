@@ -2,6 +2,10 @@ dist: trusty
 
 language: android
 
+cache:
+  directories:
+    - $HOME/.m2
+
 addons:
   apt:
     sources:
