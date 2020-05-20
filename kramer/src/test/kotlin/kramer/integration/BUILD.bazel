@@ -5,7 +5,6 @@ kt_jvm_test(
     size = "large",
     srcs = ["KramerIntegrationTest.kt"],
     data = glob(["*.json"]),
-    flaky = True,
     friends = ["//src/main/kotlin/kramer"],
     test_class = "kramer.integration.KramerIntegrationTest",
     deps = [
