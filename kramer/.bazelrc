@@ -1,0 +1,4 @@
+test --test_output=errors
+test --verbose_failures
+build --strategy=KotlinCompile=worker
+
