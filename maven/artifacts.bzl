@@ -90,18 +90,21 @@ def _package_path(artifact):
     return artifact.group_id.replace(".", "/")
 
 def _artifact_path(artifact, suffix, classifier = None):
-    return _artifact_template_with_classifier.format(
-        group_path = artifacts.package_path(artifact),
-        artifact_id = artifact.artifact_id,
-        version = artifact.version,
-        suffix = suffix,
-        classifier = artifact.classifier,
-    ) if classifier else _artifact_template.format(
-        group_path = artifacts.package_path(artifact),
-        artifact_id = artifact.artifact_id,
-        version = artifact.version,
-        suffix = suffix,
-    )
+    if classifier:
+        return _artifact_template_with_classifier.format(
+            group_path = artifacts.package_path(artifact),
+            artifact_id = artifact.artifact_id,
+            version = artifact.version,
+            suffix = suffix,
+            classifier = artifact.classifier,
+        )
+    else:
+        return _artifact_template.format(
+            group_path = artifacts.package_path(artifact),
+            artifact_id = artifact.artifact_id,
+            version = artifact.version,
+            suffix = suffix,
+        )
 
 artifacts = struct(
     annotate = _annotate_artifact,
