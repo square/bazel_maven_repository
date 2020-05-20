@@ -2,9 +2,9 @@ package kramer
 
 import com.squareup.tools.maven.resolution.ArtifactResolver
 import com.squareup.tools.maven.resolution.MavenVersion
-import kramer.MavenRepo.IndexEntry
+import kramer.GenerateMavenRepo.IndexEntry
 
-internal fun MavenRepo.handleDuplicateArtifacts(repoConfig: RepoConfig) {
+internal fun GenerateMavenRepo.handleDuplicateArtifacts(repoConfig: RepoConfig) {
   val resolver = ArtifactResolver() // only used for parsing
   kontext.out { "ERROR: Duplicate artifact entries are not permitted:" }
   repoConfig.artifacts.keys
@@ -17,11 +17,11 @@ internal fun MavenRepo.handleDuplicateArtifacts(repoConfig: RepoConfig) {
     }
 }
 
-internal fun MavenRepo.handleUnresolvedArtifacts(unresolved: Set<String>?) {
+internal fun GenerateMavenRepo.handleUnresolvedArtifacts(unresolved: Set<String>?) {
   kontext.out { "ERROR: Failed to resolve the following artifacts: $unresolved" }
 }
 
-internal fun MavenRepo.handleMissingArtifacts(remainder: Map<String, IndexEntry>) {
+internal fun GenerateMavenRepo.handleMissingArtifacts(remainder: Map<String, IndexEntry>) {
   kontext.out { "ERROR: Un-declared artifacts referenced in the dependencies of some artifacts." }
   kontext.out { "Please exclude the following or add them to your artifact configuration list." }
   kontext.out { "To add them, copy this into your artifact list:" }

@@ -1,6 +1,6 @@
 package kramer
 
-internal fun aar_template(
+internal fun aarTemplate(
   target: String,
   coordinate: String,
   customPackage: String,
@@ -30,7 +30,7 @@ android_library(
 )
 """
 
-internal fun jar_template(
+internal fun jarTemplate(
   target: String,
   coordinate: String,
   jarPath: String,

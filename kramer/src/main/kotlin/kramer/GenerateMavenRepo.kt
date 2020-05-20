@@ -39,7 +39,9 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 
-class MavenRepo(fs: FileSystem = FileSystems.getDefault()) : CliktCommand(name = "gen-maven-repo") {
+class GenerateMavenRepo(
+  fs: FileSystem = FileSystems.getDefault()
+) : CliktCommand(name = "gen-maven-repo") {
   private val workspace: Path by option(
     "--workspace",
     help = "Path to the workspace to be generated."
@@ -169,7 +171,7 @@ class MavenRepo(fs: FileSystem = FileSystems.getDefault()) : CliktCommand(name =
 
             // If we have a build snippet, use that, else use the appropriate template for the type.
             val content = config.snippet ?: when (resolved.model.packaging.trim()) {
-              "aar" -> aar_template(
+              "aar" -> aarTemplate(
                 target = resolved.target,
                 coordinate = resolved.coordinate,
                 customPackage = customPackage ?: "UNKNOWN", // Error, but should show up clearly.
@@ -179,7 +181,7 @@ class MavenRepo(fs: FileSystem = FileSystems.getDefault()) : CliktCommand(name =
                 testonly = testonly,
                 visibility = visibility
               )
-              else -> jar_template(
+              else -> jarTemplate(
                 target = resolved.target,
                 coordinate = resolved.coordinate,
                 jarPath = "${resolved.main.path}",
@@ -249,7 +251,7 @@ class MavenRepo(fs: FileSystem = FileSystems.getDefault()) : CliktCommand(name =
 private fun prepareDependencies(
   resolved: ResolvedArtifact,
   config: ArtifactConfig,
-  seen: ConcurrentHashMap<String, MavenRepo.IndexEntry>,
+  seen: ConcurrentHashMap<String, GenerateMavenRepo.IndexEntry>,
   repoConfig: RepoConfig
 ): Sequence<String> {
   val substitutes = repoConfig.targetSubstitutes.getOrElse(resolved.groupId) { mapOf() }
@@ -258,7 +260,7 @@ private fun prepareDependencies(
     .filter { dep -> "${dep.groupId}:${dep.artifactId}" !in config.exclude }
     .onEach { dep ->
       // Cache for later validation
-      val entry = seen.getOrPut("${dep.groupId}:${dep.artifactId}") { MavenRepo.IndexEntry() }
+      val entry = seen.getOrPut("${dep.groupId}:${dep.artifactId}") { GenerateMavenRepo.IndexEntry() }
       entry.versions.add(dep.version)
       entry.dependants.add(resolved.coordinate)
     }

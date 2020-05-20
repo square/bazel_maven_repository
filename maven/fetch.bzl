@@ -54,7 +54,7 @@ def _resolve_one(ctx, artifact):
     ]
     for repo, url in ctx.attr.repository_urls.items():
         args.append("--repository=%s|%s" % (repo, url))
-    args.append("resolve-one")
+    args.append("resolve-artifact")
     args.append(artifact.original_spec)
     result = ctx.execute(args, timeout = 10, quiet = True)
     if result.return_code != 0:

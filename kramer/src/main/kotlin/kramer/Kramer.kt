@@ -17,7 +17,7 @@ import org.apache.maven.model.Repository
 import org.apache.maven.model.RepositoryPolicy
 
 fun main(vararg argv: String) = Kramer()
-  .subcommands(ResolveOne(), MavenRepo())
+  .subcommands(ResolveArtifact(), GenerateMavenRepo())
   .main(argv.toList())
 
 internal class Kramer(

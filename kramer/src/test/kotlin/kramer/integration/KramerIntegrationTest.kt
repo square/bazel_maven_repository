@@ -12,8 +12,8 @@ import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Paths
 import kramer.Kramer
-import kramer.MavenRepo
-import kramer.ResolveOne
+import kramer.GenerateMavenRepo
+import kramer.ResolveArtifact
 import org.junit.After
 import org.junit.Ignore
 import org.junit.Test
@@ -38,7 +38,7 @@ class KramerIntegrationTest {
     "--local_maven_cache=$cacheDir"
   )
   private val baos = ByteArrayOutputStream()
-  private val cmd = Kramer(output = PrintStream(baos)).subcommands(ResolveOne(), MavenRepo())
+  private val cmd = Kramer(output = PrintStream(baos)).subcommands(ResolveArtifact(), GenerateMavenRepo())
 
   @After fun tearDown() {
     cacheDir.toFile().deleteRecursively()
