@@ -1,0 +1,18 @@
+{
+  "artifacts": {
+    "com.squareup.tools.build:maven-archeologist:0.0.3.1": {
+      "insecure": true,
+      "exclude": [
+        "org.apache.maven:maven-builder-support",
+        "org.apache.maven:maven-model-builder",
+        "com.squareup.okhttp3:okhttp",
+        "org.apache.maven:maven-model"
+      ]
+    }
+  },
+  "jetifier_excludes": [],
+  "maven_rules_repository": "maven_repository_rules",
+  "name": "maven",
+  "target_substitutes": {},
+  "use_jetifier": false
+}

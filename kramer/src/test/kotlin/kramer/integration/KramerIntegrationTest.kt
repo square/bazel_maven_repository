@@ -134,7 +134,7 @@ class KramerIntegrationTest {
       command +
       "--threads=$threads" +
       "--workspace=$workspace" +
-      "--configuration=$runfiles/$relativeDir/$packageDir/bazel-maven-parameters-$label-config.json"
+      "--configuration=$runfiles/$relativeDir/$packageDir/test-$label-config.json"
 
   /**
    * Executes a non-terminating run (via [CliktCommand.parse]) which traps any exceptions and
