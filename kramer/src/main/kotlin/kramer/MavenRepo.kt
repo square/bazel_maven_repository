@@ -9,6 +9,7 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
 import com.github.ajalt.clikt.parameters.types.int
 import com.github.ajalt.clikt.parameters.types.path
+import com.squareup.tools.maven.resolution.Artifact
 import com.squareup.tools.maven.resolution.ArtifactResolver
 import com.squareup.tools.maven.resolution.FetchStatus
 import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.SUCCESSFUL
@@ -104,9 +105,8 @@ class MavenRepo(fs: FileSystem = FileSystems.getDefault()) : CliktCommand(name =
               val time = measureTimeMillis {
                 resolved = resolver.resolveArtifact(artifact)
               }
-              val success = if (resolved != null) "successfully" else "unsuccessfully"
-              kontext.info { "Resolved ${artifact.coordinate} $success in ${time / 1000.0} seconds" }
-              resolved?.model?.apply {
+              if (resolved != null) with (resolved!!.model) {
+                kontext.info { "Resolved ${artifact.coordinate} in ${time / 1000.0} seconds" }
                 kontext.verbose {
                   dependencies.filter { it.scope != "test" }
                     .joinToString("\n") { dep ->
@@ -116,16 +116,14 @@ class MavenRepo(fs: FileSystem = FileSystems.getDefault()) : CliktCommand(name =
                         } else ""
                     }
                 }
+              } else {
+                unresolved.add(artifact.coordinate)
               }
-              emit(artifact to resolved tre resolver fo config)
+              emit(resolved to resolver tre config)
             }
           }
-          .filterNot { (artifact, resolved) ->
-            (resolved == null).also { notResolved ->
-              if (notResolved) { unresolved.add(artifact.coordinate) }
-            }
-          }
-          .flatMapMerge(concurrency = threadCount) { (_, resolved, resolver, config) ->
+          .filterNot { (resolved) -> resolved == null }
+          .flatMapMerge(concurrency = threadCount) { (resolved, resolver, config) ->
             resolved!! // Smart cast to not null
             flow {
               if (resolved.model.packaging == "aar") {

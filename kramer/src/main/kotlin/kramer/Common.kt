@@ -23,9 +23,7 @@ internal val acceptedScopes = setOf("compile", "runtime")
  */
 
 // h/t swankjesse
-data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 infix fun <A, B, C> Pair<A, B>.tre(c: C) = Triple(first, second, c)
-infix fun <A, B, C, D> Triple<A, B, C>.fo(d: D) = Quad(first, second, third, d)
 
 fun <K, V> Iterable<Pair<K, V>>.toImmutableListMultimap(): ImmutableListMultimap<K, V> =
   ImmutableListMultimap.Builder<K, V>().apply { forEach { (k, v) -> put(k, v) } }.build()
