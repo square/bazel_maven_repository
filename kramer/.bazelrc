@@ -2,3 +2,4 @@ test --test_output=errors
 test --verbose_failures
 build --strategy=KotlinCompile=worker
 
+try-import %workspace%/user.bazelrc

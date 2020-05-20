@@ -3,3 +3,5 @@ test --test_output=errors
 build --experimental_desugar_java8_libs=true
 build --experimental_check_desugar_deps=true
 build --strategy=Desugar=sandboxed
+
+try-import %workspace%/user.bazelrc
