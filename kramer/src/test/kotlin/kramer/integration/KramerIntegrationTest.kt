@@ -114,9 +114,9 @@ class KramerIntegrationTest {
     assertThat(output).contains("Generated 2 build files in ")
     assertThat(output).contains("Resolved 2 artifacts with 100 threads in")
 
-    val guava = cmd.readBuildFile("com.google.guava")
+    val guava = mavenRepo.readBuildFile("com.google.guava")
     assertThat(guava).contains("jetify = True")
-    val jimfs = cmd.readBuildFile("com.google.jimfs")
+    val jimfs = mavenRepo.readBuildFile("com.google.jimfs")
     assertThat(jimfs).doesNotContain("jetify")
   }
 
@@ -171,9 +171,9 @@ class KramerIntegrationTest {
     assertThat(output2).contains("Resolved 469 artifacts with 100 threads in ")
   }
 
-  private fun Kramer.readBuildFile(groupId: String): String {
+  private fun GenerateMavenRepo.readBuildFile(groupId: String): String {
     val groupPath = groupId.replace(".", "/")
-    val workspace = mavenRepo.workspace.toAbsolutePath()
+    val workspace = workspace.toAbsolutePath()
     val buildFile = workspace.resolve(groupPath).resolve("BUILD.bazel")
     assertWithMessage("File does not exist: $buildFile").that(Files.exists(buildFile)).isTrue()
     return Files.readAllLines(buildFile).joinToString("\n")
