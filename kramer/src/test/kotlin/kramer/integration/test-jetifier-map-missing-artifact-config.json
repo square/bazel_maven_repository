@@ -1,0 +1,13 @@
+{
+  "artifacts": {
+    "com.squareup.picasso:picasso:2.71828": {
+      "insecure": true,
+      "exclude": ["com.squareup.okhttp3:okhttp", "com.android.support:exifinterface"]
+    }
+  },
+  "jetifier_excludes": [],
+  "maven_rules_repository": "maven_repository_rules",
+  "name": "maven",
+  "target_substitutes": {},
+  "use_jetifier": true
+}

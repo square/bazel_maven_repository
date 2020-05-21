@@ -55,6 +55,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kramer.GenerateMavenRepo.ArtifactResolution.AarArtifactResolution
 import kramer.GenerateMavenRepo.ArtifactResolution.SimpleArtifactResolution
+import org.apache.maven.model.Dependency
 
 class GenerateMavenRepo(
   fs: FileSystem = FileSystems.getDefault()
@@ -147,6 +148,14 @@ class GenerateMavenRepo(
         if (unresolved.isNotEmpty()) {
           exit.set(1)
           handleUnresolvedArtifacts(unresolved)
+        }
+        if (repoConfig.useJetifier) {
+          with(declaredArtifactSlugs.intersect(JETIFIER_ARTIFACT_MAPPING.keys)) {
+            if (isNotEmpty()) {
+              exit.set(1)
+              handlePreAndroidXArtifacts(this)
+            }
+          }
         }
         with(seen.filterKeys { it !in declaredArtifactSlugs }) {
           if (isNotEmpty()) {
@@ -351,11 +360,26 @@ private fun prepareDependencies(
   return resolved.model.dependencies.asSequence()
     .filter { dep -> dep.scope in acceptedScopes }
     .filter { dep -> !dep.isOptional }
-    .filter { dep -> "${dep.groupId}:${dep.artifactId}" !in config.exclude }
+    .filter { dep -> dep.slug !in config.exclude }
+    .map { dep ->
+      JETIFIER_ARTIFACT_MAPPING[dep.slug]
+        ?.let {
+          val (groupId, artifactId) = it.split(":")
+          Dependency().apply {
+            this.groupId = groupId
+            this.artifactId = artifactId
+
+            // jetifier mapping doesn't specify precise versioning, so we give a fake version.
+            // It's up to the repository maintainer to select the version of androidx they want
+            // in the artifact list.
+            this.version = "SOME_VERSION"
+          }
+        } ?: dep
+    }
     .onEach { dep ->
       // Cache for later validation
       val entry =
-        seen.getOrPut("${dep.groupId}:${dep.artifactId}") { GenerateMavenRepo.IndexEntry() }
+        seen.getOrPut(dep.slug) { GenerateMavenRepo.IndexEntry() }
       entry.versions.add(dep.version)
       entry.dependants.add(resolved.coordinate)
     }

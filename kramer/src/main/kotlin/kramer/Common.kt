@@ -62,3 +62,8 @@ val Dependency.groupPath: String get() = groupPath(groupId)
 
 internal fun groupPath(string: String) = string.replace(".", "/").replace("-", "_")
 internal fun target(string: String) = string.replace(".", "_")
+
+/*
+ * Miscellaneous
+ */
+val Dependency.slug: String get() = "$groupId:$artifactId"
