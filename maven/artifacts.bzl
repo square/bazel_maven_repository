@@ -17,7 +17,9 @@ _artifact_pom_template = "{group_path}/{artifact_id}/{version}/{artifact_id}-{ve
 
 # Builds a struct containing the basic coordinate elements of a maven artifact spec.
 def _parse_spec(artifact_spec):
-    parts = artifact_spec.split(":")
+    return _parse_elements(artifact_spec.split(":"))
+
+def _parse_elements(parts):
     packaging = "jar"
     classifier = None
     version = "UNKNOWN"
@@ -27,15 +29,11 @@ def _parse_spec(artifact_spec):
         group_id, artifact_id = parts
     elif len(parts) == 3:
         group_id, artifact_id, version = parts
-    elif len(parts) == 4:
-        group_id, artifact_id, version, packaging = parts
-    elif len(parts) == 5:
-        group_id, artifact_id, version, packaging, classifier = parts
     else:
-        fail("Invalid artifact: %s" % artifact_spec)
+        fail("Invalid artifact (should be \"group_id:artifact_id:version\": %s" % ":".join(parts))
 
     return struct(
-        original_spec = artifact_spec,
+        original_spec = ":".join(parts),
         coordinate = "%s:%s" % (group_id, artifact_id),
         group_id = group_id,
         artifact_id = artifact_id,
@@ -44,7 +42,7 @@ def _parse_spec(artifact_spec):
         version = version,
     )
 
-def _munge_target(artifact_id):
+def _mangle_target(artifact_id):
     return artifact_id.replace(".", "_")
 
 # Builds an annotated struct from a more basic artifact struct, with standard paths, names, and
@@ -55,27 +53,14 @@ def _annotate_artifact(artifact):
 
     # assemble paths and target names and such.
     group_elements = artifact.group_id.split(".")
-    artifact_id_munged = _munge_target(artifact.artifact_id)
+    third_party_target_name = _mangle_target(artifact.artifact_id)
+    artifact_elements = artifact.artifact_id.replace("-", ".").split(".")
     munged_classifier_if_present = (artifact.classifier.split("-") if artifact.classifier else [])
-    maven_target_elements = group_elements + [artifact_id_munged] + munged_classifier_if_present
-    maven_target_name = "_".join(maven_target_elements)
+    maven_target_elements = group_elements + artifact_elements + munged_classifier_if_present
+    maven_target_name = "_".join(maven_target_elements).replace("-", "_")
     suffix = artifact.packaging  # TODO(cgruber) support better packaging mapping, to handle .bundles etc.
-    group_path = "/".join(group_elements)
-    if bool(artifact.classifier):
-        path = None if not bool(artifact.version) else _artifact_template_with_classifier.format(
-            group_path = group_path,
-            artifact_id = artifact.artifact_id,
-            version = artifact.version,
-            suffix = suffix,
-            classifier = artifact.classifier,
-        )
-    else:
-        path = None if not bool(artifact.version) else _artifact_template.format(
-            group_path = group_path,
-            artifact_id = artifact.artifact_id,
-            version = artifact.version,
-            suffix = suffix,
-        )
+    group_path = _package_path(artifact)
+    path = artifacts.artifact_path(artifact, suffix, artifact.classifier)
     pom = _artifact_pom_template.format(
         group_path = group_path,
         artifact_id = artifact.artifact_id,
@@ -84,9 +69,8 @@ def _annotate_artifact(artifact):
 
     annotated_artifact = struct(
         maven_target_name = maven_target_name,
-        third_party_target_name = artifact_id_munged,
+        third_party_target_name = third_party_target_name,
         path = path,
-        group_path = group_path,
         pom = pom,
         original_spec = artifact.original_spec,
         coordinate = artifact.coordinate,
@@ -98,8 +82,31 @@ def _annotate_artifact(artifact):
     )
     return annotated_artifact
 
+def _package_path(artifact):
+    return artifact.group_id.replace(".", "/")
+
+def _artifact_path(artifact, suffix, classifier = None):
+    if classifier:
+        return _artifact_template_with_classifier.format(
+            group_path = artifacts.package_path(artifact),
+            artifact_id = artifact.artifact_id,
+            version = artifact.version,
+            suffix = suffix,
+            classifier = artifact.classifier,
+        )
+    else:
+        return _artifact_template.format(
+            group_path = artifacts.package_path(artifact),
+            artifact_id = artifact.artifact_id,
+            version = artifact.version,
+            suffix = suffix,
+        )
+
 artifacts = struct(
-    parse_spec = _parse_spec,
     annotate = _annotate_artifact,
-    munge_target = _munge_target,
+    munge_target = _mangle_target,
+    artifact_path = _artifact_path,
+    package_path = _package_path,
+    parse_spec = _parse_spec,
+    parse_elements = _parse_elements,
 )

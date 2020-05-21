@@ -1,3 +1,4 @@
 exports_files([
     "maven.bzl",
+    "kramer-resolve.jar",
 ])

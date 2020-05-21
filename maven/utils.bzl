@@ -3,69 +3,19 @@
 #   Common utilities to make code a little cleaner.
 #
 
-_DICT_ENCODING_SEPARATOR = ">>>"
+def _java_executable(ctx):
+    java_home = ctx.os.environ.get("JAVA_HOME")
+    if java_home != None:
+        java = ctx.path(java_home + "/bin/java")
+        return java
+    elif ctx.which("java") != None:
+        return ctx.which("java")
+    fail("Cannot obtain java binary")
 
-# Performs a typical "trim()" operation on a string, eliminating whitespace (or optionally supplied characters) from
-# the front and back of the string.
-def _trim(string, characters = "\n "):
-    return string.strip(characters)
+def _exec_jar(root, label):
+    return "%s/../%s/%s/%s" % (root, label.workspace_name, label.package, label.name)
 
-def _contains(string, substring):
-    return not (string.find(substring) == -1)
-
-strings = struct(
-    contains = _contains,
-    trim = _trim,
-)
-
-def _filename(string):
-    (path, sep, file) = string.rpartition("/")
-    return file if bool(sep) else string
-
-paths = struct(
-    filename = _filename
-)
-
-def _max_int(a, b):
-    return a if a > b else b
-
-ints = struct(
-    max = _max_int
-)
-
-# Encodes a dict(string->dict(string->string)) into a dict(string->list(string)) with the string encoded so it can
-# be split and restored in decode_nested.  Skylark rules can't take in arbitrarily deep dict nesting.
-#
-# This function only handles one level of depth, and only handles string keys and values.
-def _encode_nested(dict):
-    result = {}
-    for key, value in dict.items():
-        if type(value) == type({}):
-            nested_encoded_list = []
-            for nested_key, nested_value in value.items():
-                nested_encoded_list += ["%s%s%s" % (nested_key, _DICT_ENCODING_SEPARATOR, nested_value)]
-            result[key] = nested_encoded_list
-        else:
-            result[key] = value
-    return result
-
-# Decodes a dict(string->list(string)) into a dict(string->dict(string->string)) by splitting the nested string using
-# the same separator used by encode_nested.  Skylark rules can't take in arbitrarily deep dict nesting.
-#
-# This function only handles one level of depth, and only handles string keys and values (in the final dictionary)
-def _decode_nested(dict):
-    result = {}
-    for key, encoded_list in dict.items():
-        nested_dict = {}
-        for encoded_item in encoded_list:
-            # Just blows up if it's not encoded right.  But this would be a software error in the bazel code, not
-            # user error, so there's no recovery from that.
-            nested_key, nested_value = encoded_item.split(_DICT_ENCODING_SEPARATOR)
-            nested_dict[nested_key] = nested_value
-        result[key] = nested_dict
-    return result
-
-dicts = struct(
-    encode_nested = _encode_nested,
-    decode_nested = _decode_nested,
+exec = struct(
+    java_bin = _java_executable,
+    exec_jar = _exec_jar,
 )

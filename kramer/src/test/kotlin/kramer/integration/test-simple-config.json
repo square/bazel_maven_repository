@@ -1,0 +1,10 @@
+{
+  "artifacts": {
+    "javax.inject:javax.inject:1": { "insecure": true }
+  },
+  "jetifier_excludes": [],
+  "maven_rules_repository": "maven_repository_rules",
+  "name": "maven",
+  "target_substitutes": {},
+  "use_jetifier": false
+}

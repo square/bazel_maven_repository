@@ -2,6 +2,10 @@ dist: trusty
 
 language: android
 
+cache:
+  directories:
+    - $HOME/.m2
+
 addons:
   apt:
     sources:
@@ -26,11 +30,14 @@ android:
 before_install:
   - wget https://github.com/bazelbuild/bazelisk/releases/download/v1.4.0/bazelisk-linux-amd64
   - sudo install bazelisk-linux-amd64 /usr/local/bin/bazel
+  - for rcfile in `find . -name travis.bazelrc` ; do cp ${rcfile} $(dirname ${rcfile})/user.bazelrc ; done
 
 script:
   - # Test the maven integration's internal unit tests
   - bazel test //...
+  - # Exercise the kramer tool.
+  - (cd kramer && bazel build //...)
+  - (cd kramer && bazel test //...)
   - # Exercise the sample project.
-  - cd test/test_workspace
-  - bazel build //...
-  - bazel test //...
+  - (cd test/test_workspace && bazel build //...)
+  - (cd test/test_workspace && bazel test //...)
