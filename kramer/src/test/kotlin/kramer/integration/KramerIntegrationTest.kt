@@ -86,6 +86,14 @@ class KramerIntegrationTest {
     assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
   }
 
+  @Test fun dontPropagateOptionalDeps() {
+    val args = configFlags("optional", "gen-maven-repo")
+    val output = cmd.test(args)
+    assertThat(output).contains("Building workspace for 2 artifacts")
+    assertThat(output).contains("Generated 2 build files in workspace")
+    assertThat(output).contains("Resolved 2 artifacts with 100 threads in")
+  }
+
   @Test fun largeListOfArtifacts() {
     val args = configFlags("large", "gen-maven-repo")
     val output = cmd.test(args)

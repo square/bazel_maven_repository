@@ -334,6 +334,7 @@ private fun prepareDependencies(
     repoConfig.targetSubstitutes.getOrElse(resolved.groupId) { mapOf() }
   return resolved.model.dependencies.asSequence()
     .filter { dep -> dep.scope in acceptedScopes }
+    .filter { dep -> !dep.isOptional }
     .filter { dep -> "${dep.groupId}:${dep.artifactId}" !in config.exclude }
     .onEach { dep ->
       // Cache for later validation
