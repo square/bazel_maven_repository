@@ -27,7 +27,11 @@ data class RepoConfig(
   val jetifierExcludes: List<String>,
   @Json(name = "maven_rules_repository")
   val mavenRulesRepository: String
-)
+) {
+  val jetifierMatcher by lazy {
+    JetifierMatcher(jetifierExcludes.map { ArtifactExclusionGlob(it) })
+  }
+}
 
 internal fun parseRepoConfig(configFile: Path): RepoConfig {
   val moshi = Moshi.Builder()

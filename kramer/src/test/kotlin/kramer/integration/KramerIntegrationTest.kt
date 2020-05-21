@@ -13,7 +13,6 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import kramer.GenerateMavenRepo
 import kramer.Kramer
-import kramer.ResolveArtifactCommand
 import org.junit.After
 import org.junit.Ignore
 import org.junit.Test
@@ -38,11 +37,11 @@ class KramerIntegrationTest {
     "--local_maven_cache=$cacheDir"
   )
   private val baos = ByteArrayOutputStream()
-  private val cmd = Kramer(output = PrintStream(baos))
-    .subcommands(ResolveArtifactCommand(), GenerateMavenRepo())
+  private val mavenRepo = GenerateMavenRepo()
+  private val cmd = Kramer(output = PrintStream(baos)).subcommands(mavenRepo)
 
   @After fun tearDown() {
-    cacheDir.toFile().deleteRecursively()
+    tmpDir.toFile().deleteRecursively()
     check(!Files.exists(cacheDir)) { "Failed to tear down and delete temp directory." }
   }
 
@@ -50,7 +49,7 @@ class KramerIntegrationTest {
     val args = configFlags("simple", "gen-maven-repo")
     val output = cmd.test(args)
     assertThat(output).contains("Building workspace for 1 artifacts")
-    assertThat(output).contains("Generated 1 build files in workspace")
+    assertThat(output).contains("Generated 1 build files in ")
     assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
   }
 
@@ -58,7 +57,7 @@ class KramerIntegrationTest {
     val args = configFlags("excludes-success", "gen-maven-repo")
     val output = cmd.test(args)
     assertThat(output).contains("Building workspace for 1 artifacts")
-    assertThat(output).contains("Generated 1 build files in workspace")
+    assertThat(output).contains("Generated 1 build files in ")
     assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
   }
 
@@ -66,7 +65,7 @@ class KramerIntegrationTest {
     val args = configFlags("excludes-failure", "gen-maven-repo")
     val output = cmd.fail(args)
     assertThat(output).contains("Building workspace for 1 artifacts")
-    assertThat(output).contains("Generated 1 build files in workspace")
+    assertThat(output).contains("Generated 1 build files in ")
     assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
 
     assertThat(output)
@@ -82,7 +81,7 @@ class KramerIntegrationTest {
     val args = configFlags("build-snippet", "gen-maven-repo")
     val output = cmd.test(args)
     assertThat(output).contains("Building workspace for 1 artifacts")
-    assertThat(output).contains("Generated 1 build files in workspace")
+    assertThat(output).contains("Generated 1 build files in ")
     assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
   }
 
@@ -90,15 +89,28 @@ class KramerIntegrationTest {
     val args = configFlags("optional", "gen-maven-repo")
     val output = cmd.test(args)
     assertThat(output).contains("Building workspace for 2 artifacts")
-    assertThat(output).contains("Generated 2 build files in workspace")
+    assertThat(output).contains("Generated 2 build files in ")
     assertThat(output).contains("Resolved 2 artifacts with 100 threads in")
+  }
+
+  @Test fun jetifierMatch() {
+    val args = configFlags("jetifier", "gen-maven-repo")
+    val output = cmd.test(args)
+    assertThat(output).contains("Building workspace for 2 artifacts")
+    assertThat(output).contains("Generated 2 build files in ")
+    assertThat(output).contains("Resolved 2 artifacts with 100 threads in")
+
+    val guava = cmd.readBuildFile("com.google.guava")
+    assertThat(guava).contains("jetify = True")
+    val jimfs = cmd.readBuildFile("com.google.jimfs")
+    assertThat(jimfs).doesNotContain("jetify")
   }
 
   @Test fun largeListOfArtifacts() {
     val args = configFlags("large", "gen-maven-repo")
     val output = cmd.test(args)
     assertThat(output).contains("Building workspace for 468 artifacts")
-    assertThat(output).contains("Generated 229 build files in workspace")
+    assertThat(output).contains("Generated 229 build files in ")
     assertThat(output).contains("Resolved 468 artifacts with 100 threads in")
   }
 
@@ -145,6 +157,14 @@ class KramerIntegrationTest {
     assertThat(output2).contains("Resolved 469 artifacts with 100 threads in ")
   }
 
+  private fun Kramer.readBuildFile(groupId: String): String {
+    val groupPath = groupId.replace(".", "/")
+    val workspace = mavenRepo.workspace.toAbsolutePath()
+    val buildFile = workspace.resolve(groupPath).resolve("BUILD.bazel")
+    assertWithMessage("File does not exist: $buildFile").that(Files.exists(buildFile)).isTrue()
+    return Files.readAllLines(buildFile).joinToString("\n")
+  }
+
   private fun configFlags(
     label: String,
     command: String,
@@ -155,7 +175,7 @@ class KramerIntegrationTest {
     kramerArgs +
       command +
       "--threads=$threads" +
-      "--workspace=$workspace" +
+      "--workspace=$tmpDir/$workspace" +
       "--configuration=$runfiles/$relativeDir/$packageDir/test-$label-config.json"
 
   /**

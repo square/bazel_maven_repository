@@ -45,7 +45,7 @@ import kramer.GenerateMavenRepo.ArtifactResolution.SimpleArtifactResolution
 class GenerateMavenRepo(
   fs: FileSystem = FileSystems.getDefault()
 ) : CliktCommand(name = "gen-maven-repo") {
-  private val workspace: Path by option(
+  internal val workspace: Path by option(
     "--workspace",
     help = "Path to the workspace to be generated."
   )
@@ -172,7 +172,9 @@ class GenerateMavenRepo(
     seen: ConcurrentHashMap<String, IndexEntry>
   ): Pair<Path, TemplateApplication> {
     val (resolved, config) = resolution
-    val jetify = if (repoConfig.useJetifier) "\n    jetify = True," else ""
+    val shouldUseJetifier =
+      repoConfig.useJetifier && !repoConfig.jetifierMatcher.matches(resolved)
+    val jetify = if (shouldUseJetifier) "\n    jetify = True," else ""
     val visibility = "[\"//visibility:public\"]" // TODO configurable.
     val testonly = if (config.testonly) "\n    testonly = True," else ""
     val deps = prepareDependencies(resolved, config, seen, repoConfig)

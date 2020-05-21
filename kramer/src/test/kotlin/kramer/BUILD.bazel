@@ -11,3 +11,15 @@ kt_jvm_test(
         "@maven//junit",
     ],
 )
+
+kt_jvm_test(
+    name = "JetifierTest",
+    srcs = ["JetifierTest.kt"],
+    friends = ["//src/main/kotlin/kramer"],
+    test_class = "kramer.JetifierTest",
+    deps = [
+        "//src/main/kotlin/kramer",
+        "@maven//com/google/truth",
+        "@maven//junit",
+    ],
+)
