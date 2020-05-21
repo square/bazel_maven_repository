@@ -60,7 +60,7 @@ val Artifact.groupPath: String get() = groupPath(groupId)
 val Dependency.target: String get() = target(artifactId)
 val Dependency.groupPath: String get() = groupPath(groupId)
 
-internal fun groupPath(string: String) = string.replace(".", "/").replace("-", "_")
+internal fun groupPath(string: String) = string.replace(".", "/")
 internal fun target(string: String) = string.replace(".", "_")
 
 /*
