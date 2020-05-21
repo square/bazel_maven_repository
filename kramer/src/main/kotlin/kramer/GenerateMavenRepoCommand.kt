@@ -149,7 +149,7 @@ class GenerateMavenRepo(
           exit.set(1)
           handleUnresolvedArtifacts(unresolved)
         }
-        if (repoConfig.useJetifier) {
+        if (repoConfig.useJetifier && !repoConfig.ignoreLegacyAndroidSupportArtifacts) {
           with(declaredArtifactSlugs.intersect(JETIFIER_ARTIFACT_MAPPING.keys)) {
             if (isNotEmpty()) {
               exit.set(1)
