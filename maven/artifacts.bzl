@@ -29,12 +29,8 @@ def _parse_elements(parts):
         group_id, artifact_id = parts
     elif len(parts) == 3:
         group_id, artifact_id, version = parts
-    elif len(parts) == 4:
-        group_id, artifact_id, version, packaging = parts
-    elif len(parts) == 5:
-        group_id, artifact_id, version, packaging, classifier = parts
     else:
-        fail("Invalid artifact: %s" % ":".join(parts))
+        fail("Invalid artifact (should be \"group_id:artifact_id:version\": %s" % ":".join(parts))
 
     return struct(
         original_spec = ":".join(parts),

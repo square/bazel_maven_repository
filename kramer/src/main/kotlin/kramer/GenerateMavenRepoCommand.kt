@@ -329,6 +329,7 @@ private fun prepareDependencies(
   seen: ConcurrentHashMap<String, GenerateMavenRepo.IndexEntry>,
   repoConfig: RepoConfig
 ): Sequence<String> {
+  if (!config.snippet.isNullOrBlank()) return sequenceOf()
   val substitutes =
     repoConfig.targetSubstitutes.getOrElse(resolved.groupId) { mapOf() }
   return resolved.model.dependencies.asSequence()

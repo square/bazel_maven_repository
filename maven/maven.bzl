@@ -101,7 +101,7 @@ def _fix_string_booleans(value):
         return value.lower() == "true"
     return bool(value)
 
-# If artifact/sha pair has missing sha hashes, reject it.
+# Validate artifact configurations.
 def _validate_artifacts(artifact_definitions):
     errors = []
     if not bool(artifact_definitions):
@@ -128,6 +128,10 @@ def _validate_artifacts(artifact_definitions):
         if (properties.get(artifact_config_properties.SHA256, None) and
             _fix_string_booleans(properties.get(artifact_config_properties.INSECURE, False))):
             errors += ["""Artifact "%s" cannot be both insecure and have a sha256.  Specify one or the other.""" % spec]
+        if (properties.get(artifact_config_properties.BUILD_SNIPPET, None) and
+            properties.get(artifact_config_properties.EXCLUDE)):
+            errors += ["""Artifact "%s" cannot both have a build snippet and declare an exclusion list.""" % spec]
+
     if bool(errors):
         fail("Errors found:\n    %s" % "\n    ".join(errors))
 

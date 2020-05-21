@@ -76,6 +76,16 @@ class KramerIntegrationTest {
     assertThat(output).contains(""""exclude": ["org.apache.maven:maven-builder-support"]""")
   }
 
+  @Test fun buildSnippetOverridesUndeclared() {
+    // If an artifact has a build snippet, it's deps should not contribute to the required list.
+    // This config includes a build snippet but no excludes.
+    val args = configFlags("build-snippet", "gen-maven-repo")
+    val output = cmd.test(args)
+    assertThat(output).contains("Building workspace for 1 artifacts")
+    assertThat(output).contains("Generated 1 build files in workspace")
+    assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
+  }
+
   @Test fun largeListOfArtifacts() {
     val args = configFlags("large", "gen-maven-repo")
     val output = cmd.test(args)
