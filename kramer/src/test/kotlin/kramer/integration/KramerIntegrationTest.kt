@@ -11,9 +11,9 @@ import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Paths
-import kramer.Kramer
 import kramer.GenerateMavenRepo
-import kramer.ResolveArtifact
+import kramer.Kramer
+import kramer.ResolveArtifactCommand
 import org.junit.After
 import org.junit.Ignore
 import org.junit.Test
@@ -38,7 +38,8 @@ class KramerIntegrationTest {
     "--local_maven_cache=$cacheDir"
   )
   private val baos = ByteArrayOutputStream()
-  private val cmd = Kramer(output = PrintStream(baos)).subcommands(ResolveArtifact(), GenerateMavenRepo())
+  private val cmd = Kramer(output = PrintStream(baos))
+    .subcommands(ResolveArtifactCommand(), GenerateMavenRepo())
 
   @After fun tearDown() {
     cacheDir.toFile().deleteRecursively()
@@ -49,7 +50,7 @@ class KramerIntegrationTest {
     val args = configFlags("simple", "gen-maven-repo")
     val output = cmd.test(args)
     assertThat(output).contains("Building workspace for 1 artifacts")
-    assertThat(output).contains("Writing 1 build files into workspace")
+    assertThat(output).contains("Generated 1 build files in workspace")
     assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
   }
 
@@ -57,7 +58,7 @@ class KramerIntegrationTest {
     val args = configFlags("excludes-success", "gen-maven-repo")
     val output = cmd.test(args)
     assertThat(output).contains("Building workspace for 1 artifacts")
-    assertThat(output).contains("Writing 1 build files into workspace")
+    assertThat(output).contains("Generated 1 build files in workspace")
     assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
   }
 
@@ -65,7 +66,7 @@ class KramerIntegrationTest {
     val args = configFlags("excludes-failure", "gen-maven-repo")
     val output = cmd.fail(args)
     assertThat(output).contains("Building workspace for 1 artifacts")
-    assertThat(output).contains("Writing 1 build files into workspace")
+    assertThat(output).contains("Generated 1 build files in workspace")
     assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
 
     assertThat(output)
@@ -79,7 +80,7 @@ class KramerIntegrationTest {
     val args = configFlags("large", "gen-maven-repo")
     val output = cmd.test(args)
     assertThat(output).contains("Building workspace for 468 artifacts")
-    assertThat(output).contains("Writing 229 build files into workspace")
+    assertThat(output).contains("Generated 229 build files in workspace")
     assertThat(output).contains("Resolved 468 artifacts with 100 threads in")
   }
 

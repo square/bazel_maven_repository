@@ -12,7 +12,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.runBlocking
 
-internal class ResolveArtifact() : CliktCommand(name = "resolve-artifact") {
+internal class ResolveArtifactCommand() : CliktCommand(name = "resolve-artifact") {
   private val artifactSpec: String by argument()
 
   private val kontext by requireObject<Kontext>()
