@@ -26,6 +26,7 @@ import com.squareup.tools.maven.resolution.ArtifactResolver
 import com.squareup.tools.maven.resolution.FetchStatus
 import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.SUCCESSFUL
 import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.SUCCESSFUL.FOUND_IN_CACHE
+import com.squareup.tools.maven.resolution.FileSpec
 import com.squareup.tools.maven.resolution.Repositories.Companion.DEFAULT
 import com.squareup.tools.maven.resolution.ResolvedArtifact
 import java.io.IOException
@@ -69,8 +70,7 @@ internal class FetchArtifactCommand() : CliktCommand(name = "fetch-artifact") {
 
   data class FetchResult(
     val resolved: ResolvedArtifact,
-    val status: FetchStatus,
-    val hash: String
+    val status: FetchStatus
   )
 
   private fun fetch(spec: String): FetchResult {
@@ -88,8 +88,7 @@ internal class FetchArtifactCommand() : CliktCommand(name = "fetch-artifact") {
     if (status !is SUCCESSFUL) kontext.exit(1) {
       "ERROR: Could not resolve $spec! Attempted from ${repoList.map { it.url }}"
     }
-    val hash = Files.readAllBytes(resolved.main.localFile).sha256()
-    return FetchResult(resolved, status, hash)
+    return FetchResult(resolved, status)
   }
 
   override fun run() {
@@ -97,21 +96,23 @@ internal class FetchArtifactCommand() : CliktCommand(name = "fetch-artifact") {
     val benchmark = measureTimeMillis {
       result = fetch(artifactSpec)
       with(result!!) {
-        if (sha256 != null && hash != sha256) kontext.exit(1) {
-          val file = resolved.main.localFile
-          "ERROR: $file hash ($hash) is not the expected hash ($sha256)"
-        }
-        for (file in listOf(resolved.pom, resolved.main)) {
-          createDirectories(workspace.resolve(prefix).resolve(file.path).parent)
-          copy(file.localFile, workspace.resolve(prefix).resolve(file.path), REPLACE_EXISTING)
+        if (sha256 != null) {
+          val hash = Files.readAllBytes(resolved.main.localFile).sha256()
+          if (hash != sha256) kontext.exit(1) {
+            val file = resolved.main.localFile
+            "ERROR: $file hash ($hash) is not the expected hash ($sha256)"
+          }
         }
         val buildFile = workspace.resolve(prefix).resolve("BUILD.bazel")
         when (resolved.model.packaging.trim()) {
           "aar" -> {
+            linkOrCopy(resolved.pom)
             unzip(resolved.main.localFile, buildFile.parent)
             write(buildFile, AAR_DOWNLOAD_BUILD_FILE.lines(), CREATE)
           }
           else -> {
+            linkOrCopy(resolved.pom)
+            linkOrCopy(resolved.main)
             write(buildFile, fetchArtifactTemplate(prefix, resolved.main.path).lines(), CREATE)
           }
         }
@@ -121,8 +122,25 @@ internal class FetchArtifactCommand() : CliktCommand(name = "fetch-artifact") {
       kontext.out {
         val fromCache = if (status == FOUND_IN_CACHE) " from cache" else ""
         val insecurely = if (sha256.isNullOrBlank()) " insecurely" else ""
-        val shaOut = if (sha256 == null) "SHA256: $hash" else ""
-        "Resolved $artifactSpec$insecurely$fromCache in ${benchmark / 1000.0} seconds. $shaOut"
+        "Resolved $artifactSpec$insecurely$fromCache in ${benchmark / 1000.0} seconds."
+      }
+    }
+  }
+
+  private fun linkOrCopy(file: FileSpec) {
+    createDirectories(workspace.resolve(prefix).resolve(file.path).parent)
+    val destination = workspace.resolve(prefix).resolve(file.path)
+    val source = file.localFile
+    try {
+      Files.createLink(destination, source)
+      kontext.info { "Hard link created from $source to $destination" }
+    } catch (e: Exception) {
+      try {
+        Files.createSymbolicLink(destination, source)
+        kontext.info { "Symbolic link created from $source to $destination" }
+      } catch (e: Exception) {
+        copy(source, destination, REPLACE_EXISTING)
+        kontext.info { "File copied from $source to $destination" }
       }
     }
   }

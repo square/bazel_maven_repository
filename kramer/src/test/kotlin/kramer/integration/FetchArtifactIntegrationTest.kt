@@ -49,8 +49,6 @@ class FetchArtifactIntegrationTest {
   @Test fun fetchJarInsecurely() {
     val output = cmd.test(flags("com.google.guava:guava:18.0"), baos)
     assertThat(output).contains("Resolved com.google.guava:guava:18.0 insecurely in")
-    assertThat(output)
-      .contains("SHA256: d664fbfc03d2e5ce9cab2a44fb01f1d0bf9dfebeccc1a473b1f9ea31f79f6f99")
     fetchCommand.assertExists("com/google/guava/guava/18.0/guava-18.0.pom")
     fetchCommand.assertExists("com/google/guava/guava/18.0/guava-18.0.jar")
     val build = Files.readAllLines(fetchCommand.dir.resolve("BUILD.bazel")).joinToString("\n")
@@ -73,10 +71,7 @@ class FetchArtifactIntegrationTest {
   @Test fun fetchAarInsecurely() {
     val output = cmd.test(flags("androidx.core:core:1.1.0"), baos)
     assertThat(output).contains("Resolved androidx.core:core:1.1.0 insecurely in")
-    assertThat(output)
-      .contains("SHA256: 76c7cfbe596fe3c09a6983bf1c89e889299c08ac9a3b52ce5182a088d056647e")
     fetchCommand.assertExists("androidx/core/core/1.1.0/core-1.1.0.pom")
-    fetchCommand.assertExists("androidx/core/core/1.1.0/core-1.1.0.aar")
     fetchCommand.assertExists("classes.jar")
     fetchCommand.assertExists("AndroidManifest.xml")
     val build = Files.readAllLines(fetchCommand.dir.resolve("BUILD.bazel")).joinToString("\n")
