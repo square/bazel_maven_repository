@@ -28,7 +28,7 @@ def _fetch_artifact_impl(ctx):
     if bool(ctx.attr.sha256):
         args.append("--sha256=%s" % ctx.attr.sha256)
     args.append(spec)
-    result = ctx.execute(args, timeout = 300, quiet = True)
+    result = ctx.execute(args, timeout = 300, quiet = False)
     if result.return_code != 0:
         fail("Could not download %s - exit code %s:\n %s%s" % (
             ctx.attr.artifact,
