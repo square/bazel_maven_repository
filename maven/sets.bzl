@@ -1,3 +1,15 @@
+#
+# Copyright (C) 2018 Square, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License. You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software distributed under the License
+# is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+# or implied. See the License for the specific language governing permissions and limitations under
+# the License.
 """
 A set of utilities that provide set-like behavior, using a dict (specifically its keys) as the underlying
 implementation.  Generally only use dictionaries created by sets.new() because values are normalized. Using
@@ -34,16 +46,6 @@ def _add_all(set, items):
         fail("Error, invalid %s argument passed to set operation." % item_type)
     return set
 
-def _add_each(set, *items):
-    """Adds all items in the variable argument to the set and returns the set"""
-    _add_all_as_list(set, list(items))
-    return set
-
-def _pop(set):
-    """Pops the next item from the set."""
-    item, _ = set.popitem()
-    return item
-
 def _new(*items):
     """Creates a new set, from a variable array of parameters. """
     return {} if not bool(items) else sets.add_all({}, list(items))
@@ -56,21 +58,11 @@ def _difference(a, b):
     """Returns the elements that reflect the set difference (items in b that are not in a)"""
     return sets.copy_of([x for x in list(b) if not sets.contains(a, x)])
 
-def _disjoint(a, b):
-    """Returns the elements each of a or b, but which are not in both sets."""
-    set = sets.new()
-    sets.add_all(set, sets.difference(b, a))
-    sets.add_all(set, sets.difference(a, b))
-    return set
-
 sets = struct(
     difference = _difference,
-    disjoint = _disjoint,
     contains = _contains,
     add = _add,
     add_all = _add_all,
-    add_each = _add_each,
-    pop = _pop,
     new = _new,
     copy_of = _copy_of,
 )

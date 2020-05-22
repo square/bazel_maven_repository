@@ -37,25 +37,10 @@ def add_all_as_dict_test(env):
     sets.add_all(a, {"foo": "", "bar": "", "baz": ""})
     asserts.equals(env, ["foo", "bar", "baz"], list(a))
 
-def add_each_test(env):
-    a = sets.new()
-    sets.add_each(a, "foo", "bar", "baz")
-    asserts.equals(env, ["foo", "bar", "baz"], list(a))
-
 def set_behavior_test(env):
     a = sets.new("foo", "bar", "baz")
     sets.add(a, "bar")
     asserts.equals(env, ["foo", "bar", "baz"], list(a))
-
-def pop_test(env):
-    a = sets.new("a", "b", "c")
-    item = sets.pop(a)
-    asserts.equals(env, 2, len(a))
-    item = sets.pop(a)
-    asserts.equals(env, 1, len(a))
-    item = sets.pop(a)
-    asserts.equals(env, 0, len(a))
-    # Can't test failure, as that invokes bazel fail().
 
 def contains_test(env):
     a = sets.new("a")
@@ -64,28 +49,20 @@ def contains_test(env):
 
 def difference_test(env):
     a = sets.new("a", "b", "c")
-    b = sets.new ("c", "d", "e")
+    b = sets.new("c", "d", "e")
     asserts.equals(env, sets.new("d", "e"), sets.difference(a, b))
     asserts.equals(env, sets.new("a", "b"), sets.difference(b, a))
-
-def disjoint_test(env):
-    a = sets.new("a", "b", "c")
-    b = sets.new ("c", "d", "e")
-    asserts.equals(env, sets.new("a", "b", "d", "e"), sets.disjoint(a, b))
 
 TESTS = [
     new_test,
     equality_test,
     inequality_test,
-    pop_test,
     add_test,
     add_all_as_dict_test,
     add_all_as_list_test,
-    add_each_test,
     set_behavior_test,
     contains_test,
     difference_test,
-    disjoint_test,
 ]
 
 # Roll-up function.

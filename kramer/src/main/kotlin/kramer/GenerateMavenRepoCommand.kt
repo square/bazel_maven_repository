@@ -206,7 +206,7 @@ class GenerateMavenRepo(
 
     // If we have a build snippet, use that, else use the appropriate template for the type.
     val content = config.snippet ?: when (resolution) {
-      is AarArtifactResolution -> aarTemplate(
+      is AarArtifactResolution -> mavenAarTemplate(
         target = resolved.target,
         coordinate = resolved.coordinate,
         customPackage = resolution.androidPackage,
@@ -216,7 +216,7 @@ class GenerateMavenRepo(
         testonly = testonly,
         visibility = visibility
       )
-      else -> jarTemplate(
+      else -> mavenJarTemplate(
         target = resolved.target,
         coordinate = resolved.coordinate,
         jarPath = "${resolved.main.path}",

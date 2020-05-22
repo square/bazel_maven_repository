@@ -1,19 +1,22 @@
 #
+# Copyright (C) 2020 Square, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License. You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software distributed under the License
+# is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+# or implied. See the License for the specific language governing permissions and limitations under
+# the License.
+
+#
 # Utilities for processing maven artifact coordinates and generating useful structs.
 #
 
-# Artifact types supported by maven_jvm_artifact()
-_supported_jvm_artifact_packaging = [
-    "jar",
-    "aar",
-]
-
-# All supported artifact types (Can be extended for non-jvm packaging types.)
-_supported_artifact_packaging = _supported_jvm_artifact_packaging
-
 _artifact_template = "{group_path}/{artifact_id}/{version}/{artifact_id}-{version}.{suffix}"
 _artifact_template_with_classifier = "{group_path}/{artifact_id}/{version}/{artifact_id}-{version}-{classifier}.{suffix}"
-_artifact_pom_template = "{group_path}/{artifact_id}/{version}/{artifact_id}-{version}.pom"
 
 # Builds a struct containing the basic coordinate elements of a maven artifact spec.
 def _parse_spec(artifact_spec):
@@ -45,42 +48,12 @@ def _parse_elements(parts):
 def _mangle_target(artifact_id):
     return artifact_id.replace(".", "_")
 
-# Builds an annotated struct from a more basic artifact struct, with standard paths, names, and
-# other values derived from the basic artifact spec elements.
-def _annotate_artifact(artifact):
-    if not bool(artifact.version):
-        fail("Error, no version specified for %s:%s" % (artifact.group_id, artifact.artifact_id))
-
-    # assemble paths and target names and such.
+def _fetch_repo(artifact):
     group_elements = artifact.group_id.split(".")
-    third_party_target_name = _mangle_target(artifact.artifact_id)
     artifact_elements = artifact.artifact_id.replace("-", ".").split(".")
     munged_classifier_if_present = (artifact.classifier.split("-") if artifact.classifier else [])
     maven_target_elements = group_elements + artifact_elements + munged_classifier_if_present
-    maven_target_name = "_".join(maven_target_elements).replace("-", "_")
-    suffix = artifact.packaging  # TODO(cgruber) support better packaging mapping, to handle .bundles etc.
-    group_path = _package_path(artifact)
-    path = artifacts.artifact_path(artifact, suffix, artifact.classifier)
-    pom = _artifact_pom_template.format(
-        group_path = group_path,
-        artifact_id = artifact.artifact_id,
-        version = artifact.version,
-    ) if bool(artifact.version) else None
-
-    annotated_artifact = struct(
-        maven_target_name = maven_target_name,
-        third_party_target_name = third_party_target_name,
-        path = path,
-        pom = pom,
-        original_spec = artifact.original_spec,
-        coordinate = artifact.coordinate,
-        group_id = artifact.group_id,
-        artifact_id = artifact.artifact_id,
-        packaging = artifact.packaging,
-        classifier = artifact.classifier,
-        version = artifact.version,
-    )
-    return annotated_artifact
+    return "_".join(maven_target_elements).replace("-", "_")
 
 def _package_path(artifact):
     return artifact.group_id.replace(".", "/")
@@ -103,10 +76,9 @@ def _artifact_path(artifact, suffix, classifier = None):
         )
 
 artifacts = struct(
-    annotate = _annotate_artifact,
-    munge_target = _mangle_target,
+    mangle_target = _mangle_target,
     artifact_path = _artifact_path,
     package_path = _package_path,
     parse_spec = _parse_spec,
-    parse_elements = _parse_elements,
+    fetch_repo = _fetch_repo,
 )

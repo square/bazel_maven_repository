@@ -1,52 +1,21 @@
-load(":artifacts.bzl", "artifacts")
-load(":utils.bzl", "exec")
+#
+# Copyright (C) 2020 Square, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License. You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software distributed under the License
+# is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+# or implied. See the License for the specific language governing permissions and limitations under
+# the License.
+load(":exec.bzl", "exec")
 
-DOWNLOAD_PREFIX = "maven"
-
-_FORBIDDEN_FILES = [
-    ".",
-    "WORKSPACE",
-    "BUILD",
-    "BUILD.bazel",
-    "%s/BUILD" % DOWNLOAD_PREFIX,
-    "%s/BUILD.bazel" % DOWNLOAD_PREFIX,
-]
-
-_ARTIFACT_DOWNLOAD_BUILD_FILE_TEMPLATE = """
-package(default_visibility = ["//visibility:public"])
-filegroup(
-    name = "{prefix}",
-    srcs = ["{path}"],
-)
-"""
-
-_AAR_DOWNLOAD_BUILD_FILE = """
-package(default_visibility = ["//visibility:public"])
-exports_files(["AndroidManifest.xml", "classes.jar"])
-
-filegroup(
-  name = "resources",
-  srcs = glob(["res/**/*"])
-)
-
-filegroup(
-  name = "assets",
-  srcs = glob(["assets/**/*"])
-)
-
-filegroup(
-  name = "proguard",
-  srcs = glob(["proguard.txt"])
-)
-
-"""
-
-def get_suffix(packaging):
-    if packaging == "bundle":
-        return "jar"
-    return packaging
-
-def _resolve_one(ctx, artifact):
+def _fetch_artifact_impl(ctx):
+    repository_root_path = ctx.path(".")
+    ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
+    spec = ":".join(ctx.attr.artifact.split(":")[0:3])  # Strip extra artifact elements.
     args = [
         exec.java_bin(ctx),
         "-jar",
@@ -54,55 +23,19 @@ def _resolve_one(ctx, artifact):
     ]
     for repo, url in ctx.attr.repository_urls.items():
         args.append("--repository=%s|%s" % (repo, url))
-    args.append("resolve-artifact")
-    args.append(artifact.original_spec)
-    result = ctx.execute(args, timeout = 10, quiet = True)
+    args.append("fetch-artifact")
+    args.append("--workspace=%s" % ctx.path("."))
+    if bool(ctx.attr.sha256):
+        args.append("--sha256=%s" % ctx.attr.sha256)
+    args.append(spec)
+    result = ctx.execute(args, timeout = 300, quiet = True)
     if result.return_code != 0:
-        fail("Could not resolve %s - kramer returned exit code %s: %s%s" % (
+        fail("Could not download %s - exit code %s:\n %s%s" % (
             ctx.attr.artifact,
             result.return_code,
             result.stderr,
             result.stdout,
         ))
-    return result.stdout
-
-def _validate_download_path(ctx, download_path):
-    for file in _FORBIDDEN_FILES:
-        if ctx.path(file) == download_path:
-            fail("Invalid local_path: %s" % download_path)
-    if not str(download_path).startswith(str(ctx.path("."))):
-        fail("Invalid local_path: %s" % ctx.attr.local_path)
-
-def _fetch_artifact_impl(ctx):
-    repository_root_path = ctx.path(".")
-    ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
-
-    artifact = artifacts.parse_elements(ctx.attr.artifact.split(":")[0:3])  # Ignore old spec.
-    resolved_spec = _resolve_one(ctx, artifact)
-    packaging = resolved_spec.split("|")[1].strip()
-    package_dir = artifacts.package_path(artifact)
-    artifact_path = artifacts.artifact_path(artifact, get_suffix(packaging))
-    download_path = ctx.path("%s/%s" % (DOWNLOAD_PREFIX, artifact_path))
-    _validate_download_path(ctx, download_path)
-
-    artifact_urls = ["%s/%s" % (repo, artifact_path) for repo in ctx.attr.repository_urls.values()]
-    if packaging == "aar":
-        ctx.file("%s/BUILD.bazel" % DOWNLOAD_PREFIX, _AAR_DOWNLOAD_BUILD_FILE)
-        ctx.download_and_extract(
-            url = artifact_urls,
-            output = DOWNLOAD_PREFIX,
-            sha256 = ctx.attr.sha256,
-            type = "zip",
-        )
-    else:
-        ctx.file(
-            "%s/BUILD.bazel" % DOWNLOAD_PREFIX,
-            _ARTIFACT_DOWNLOAD_BUILD_FILE_TEMPLATE.format(
-                prefix = DOWNLOAD_PREFIX,
-                path = artifact_path,
-            ),
-        )
-        ctx.download(url = artifact_urls, output = download_path, sha256 = ctx.attr.sha256)
 
 fetch_artifact = repository_rule(
     implementation = _fetch_artifact_impl,
