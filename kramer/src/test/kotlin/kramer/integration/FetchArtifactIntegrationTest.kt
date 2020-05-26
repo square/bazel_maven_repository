@@ -40,6 +40,7 @@ class FetchArtifactIntegrationTest {
     "--repository=${MAVEN_CENTRAL.id}|${MAVEN_CENTRAL.url}",
     "--repository=${GOOGLE_ANDROID.id}|${GOOGLE_ANDROID.url}",
     "--repository=spring_io_plugins|https://repo.spring.io/plugins-release",
+    "--verbose",
     "--local_maven_cache=$cacheDir"
   )
   private val baos = ByteArrayOutputStream()
@@ -48,7 +49,7 @@ class FetchArtifactIntegrationTest {
 
   @Test fun fetchJarInsecurely() {
     val output = cmd.test(flags("com.google.guava:guava:18.0"), baos)
-    assertThat(output).contains("Resolved com.google.guava:guava:18.0 insecurely in")
+    assertThat(output).contains("Fetched com.google.guava:guava:18.0 insecurely in")
     fetchCommand.assertExists("com/google/guava/guava/18.0/guava-18.0.pom")
     fetchCommand.assertExists("com/google/guava/guava/18.0/guava-18.0.jar")
     val build = Files.readAllLines(fetchCommand.dir.resolve("BUILD.bazel")).joinToString("\n")
@@ -60,7 +61,7 @@ class FetchArtifactIntegrationTest {
       artifactSpec = "com.google.guava:guava:18.0",
       sha256 = "d664fbfc03d2e5ce9cab2a44fb01f1d0bf9dfebeccc1a473b1f9ea31f79f6f99"
     ), baos)
-    assertThat(output).contains("Resolved com.google.guava:guava:18.0 in")
+    assertThat(output).contains("Fetched com.google.guava:guava:18.0 in")
     assertThat(output).doesNotContain("SHA256")
     fetchCommand.assertExists("com/google/guava/guava/18.0/guava-18.0.pom")
     fetchCommand.assertExists("com/google/guava/guava/18.0/guava-18.0.jar")
@@ -70,7 +71,7 @@ class FetchArtifactIntegrationTest {
 
   @Test fun fetchAarInsecurely() {
     val output = cmd.test(flags("androidx.core:core:1.1.0"), baos)
-    assertThat(output).contains("Resolved androidx.core:core:1.1.0 insecurely in")
+    assertThat(output).contains("Fetched androidx.core:core:1.1.0 insecurely in")
     fetchCommand.assertExists("androidx/core/core/1.1.0/core-1.1.0.pom")
     fetchCommand.assertExists("classes.jar")
     fetchCommand.assertExists("AndroidManifest.xml")

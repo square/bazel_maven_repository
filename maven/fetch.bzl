@@ -14,6 +14,8 @@ load(":exec.bzl", "exec")
 
 def _fetch_artifact_impl(ctx):
     repository_root_path = ctx.path(".")
+    verbosity = int(ctx.os.environ.get("BAZEL_MAVEN_VERBOSITY", "0"))
+    print(verbosity)
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
     spec = ":".join(ctx.attr.artifact.split(":")[0:3])  # Strip extra artifact elements.
     args = [
@@ -23,6 +25,10 @@ def _fetch_artifact_impl(ctx):
     ]
     for repo, url in ctx.attr.repository_urls.items():
         args.append("--repository=%s|%s" % (repo, url))
+    if verbosity > 1:
+        args.append("--verbose")
+    if verbosity > 0:
+        args.append("--verbose")
     args.append("fetch-artifact")
     args.append("--workspace=%s" % ctx.path("."))
     if bool(ctx.attr.sha256):

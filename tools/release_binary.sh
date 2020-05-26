@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 (cd kramer && bazel test //...)
 (cd kramer && bazel build //:kramer_deploy.jar)
 RELEASE_JAR=maven/kramer-resolve.jar

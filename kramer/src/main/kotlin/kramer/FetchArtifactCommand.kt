@@ -24,6 +24,10 @@ import com.github.ajalt.clikt.parameters.options.required
 import com.github.ajalt.clikt.parameters.types.path
 import com.squareup.tools.maven.resolution.ArtifactResolver
 import com.squareup.tools.maven.resolution.FetchStatus
+import com.squareup.tools.maven.resolution.FetchStatus.ERROR
+import com.squareup.tools.maven.resolution.FetchStatus.INVALID_HASH
+import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.FETCH_ERROR
+import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.NOT_FOUND
 import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.SUCCESSFUL
 import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.SUCCESSFUL.FOUND_IN_CACHE
 import com.squareup.tools.maven.resolution.FileSpec
@@ -85,8 +89,34 @@ internal class FetchArtifactCommand() : CliktCommand(name = "fetch-artifact") {
       "ERROR: Could not resolve $spec! Attempted from ${repoList.map { it.url }}"
     }
     val status = resolver.downloadArtifact(artifact = resolved)
-    if (status !is SUCCESSFUL) kontext.exit(1) {
-      "ERROR: Could not resolve $spec! Attempted from ${repoList.map { it.url }}"
+    when (status) {
+      is SUCCESSFUL -> {}
+      is INVALID_HASH ->  kontext.exit(1) {
+        "ERROR: Invalid maven hashes for $spec from ${repoList.map { it.url }}. " +
+          "Check that ${resolved.main.localFile} is the expected file."
+      }
+      is FETCH_ERROR -> kontext.exit(1) {
+        "ERROR: Problem fetching main artifact for $spec from ${status.repository}: " +
+          "(${status.responseCode}) ${status.message}"
+      }
+      is NOT_FOUND -> kontext.exit(1) {
+        "ERROR: Artifact $spec not found at ${repoList.first().url}/${resolved.main.path}"
+      }
+      is ERROR -> kontext.exit(1) {
+        // Errors from all download attempts, so enumerate them.
+        "ERROR: Problem fetching main artifact for $spec:\n" +
+          status.errors.entries.joinToString("\n") { (repoId, status) ->
+            val repo = repoList.find { it.id == repoId }!!
+            val message =
+              when (status) {
+                is NOT_FOUND -> "(404 - not found)"
+                is FETCH_ERROR -> "(${status.responseCode}) \"${status.message}\""
+                is SUCCESSFUL ->
+                  throw AssertionError("Successful should not be returned in an error case.")
+              }
+            "    - $message from ${repo.url}/${resolved.main.path}"
+          }
+      }
     }
     return FetchResult(resolved, status)
   }
@@ -119,10 +149,10 @@ internal class FetchArtifactCommand() : CliktCommand(name = "fetch-artifact") {
       }
     }
     with(result!!) {
-      kontext.out {
+      kontext.info {
         val fromCache = if (status == FOUND_IN_CACHE) " from cache" else ""
         val insecurely = if (sha256.isNullOrBlank()) " insecurely" else ""
-        "Resolved $artifactSpec$insecurely$fromCache in ${benchmark / 1000.0} seconds."
+        "Fetched $artifactSpec$insecurely$fromCache in ${benchmark / 1000.0} seconds."
       }
     }
   }
@@ -133,14 +163,14 @@ internal class FetchArtifactCommand() : CliktCommand(name = "fetch-artifact") {
     val source = file.localFile
     try {
       Files.createLink(destination, source)
-      kontext.info { "Hard link created from $source to $destination" }
+      kontext.verbose { "Hard link created from $source to $destination" }
     } catch (e: Exception) {
       try {
         Files.createSymbolicLink(destination, source)
-        kontext.info { "Symbolic link created from $source to $destination" }
+        kontext.verbose { "Symbolic link created from $source to $destination" }
       } catch (e: Exception) {
         copy(source, destination, REPLACE_EXISTING)
-        kontext.info { "File copied from $source to $destination" }
+        kontext.verbose { "File copied from $source to $destination" }
       }
     }
   }
