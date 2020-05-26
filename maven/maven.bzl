@@ -16,9 +16,9 @@
 #
 load(":artifacts.bzl", "artifacts")
 load(":jvm.bzl", "raw_jvm_import")
-load(":fetch.bzl", "DOWNLOAD_PREFIX", "fetch_artifact")
+load(":fetch.bzl", "fetch_artifact")
 load(":sets.bzl", "sets")
-load(":utils.bzl", "exec")
+load(":exec.bzl", "exec")
 load(
     ":jetifier.bzl",
     "DEFAULT_JETIFIER_EXCLUDED_ARTIFACTS",
@@ -78,14 +78,11 @@ _generate_maven_repository = repository_rule(
 # Legacy implementation of the maven_jvm_artifact rule (for snippet use only)
 def _maven_jvm_artifact(coordinates, name, visibility, deps = [], use_jetifier = False, **kwargs):
     print("WARNING: maven_jvm_artifact is deprecated, please use raw_jvm_import")
-    artifact = artifacts.annotate(artifacts.parse_spec(coordinates))
-    file_target = "@%s//%s:%s" % (artifact.maven_target_name, DOWNLOAD_PREFIX, artifact.path)
-    import_target = artifact.maven_target_name + "_import"
-    target_name = name if name else artifact.third_party_target_name
-    coordinate = "%s:%s" % (artifact.group_id, artifact.artifact_id)
-
+    artifact = artifacts.parse_spec(coordinates)
+    path = artifacts.artifact_path(artifact, "jar", artifact.classifier)
+    file_target = "@%s//%s:%s" % (artifacts.fetch_repo(artifact), "maven", path)
     raw_jvm_import(
-        name = target_name,
+        name = name,
         deps = deps,
         visibility = visibility,
         jar = file_target,
@@ -145,7 +142,6 @@ def _maven_repository_specification(
         name,
         use_jetifier,
         jetifier_excludes,
-        legacy_underscore,
         ignore_legacy_android_support_artifacts = False,
         artifact_declarations = {},
         insecure_artifacts = [],
@@ -160,11 +156,11 @@ def _maven_repository_specification(
     _validate_artifacts(artifact_declarations)
 
     for artifact_spec, properties in artifact_declarations.items():
-        artifact = artifacts.annotate(artifacts.parse_spec(artifact_spec))
+        artifact = artifacts.parse_spec(artifact_spec)
         sha256 = properties.get(artifact_config_properties.SHA256, None)
         fetch_artifact(
-            name = artifact.maven_target_name,
-            # Don't use the spec, because it may have the type which we shouldn't have.
+            name = artifacts.fetch_repo(artifact),
+            # Don't use the un-parsed spec, because it may have the type which we shouldn't have.
             artifact = artifact.original_spec,
             sha256 = sha256,
             repository_urls = repository_urls,
@@ -220,7 +216,6 @@ def maven_repository_specification(
         # The list of artifacts (without sha256 hashes) that will be used without file hash checking.
         # DEPRECATED: Please use artifacts with an "insecure = true" property.
         insecure_artifacts = [],
-        legacy_underscore = False,
 
         # The dictionary of build-file substitutions (per-target) which will replace the auto-generated target
         # statements in the generated repository
@@ -255,7 +250,6 @@ def maven_repository_specification(
         name = name,
         artifact_declarations = artifacts,
         insecure_artifacts = insecure_artifacts,
-        legacy_underscore = legacy_underscore,
         build_substitutes = build_substitutes,
         dependency_target_substitutes = dependency_target_substitutes,
         use_jetifier = use_jetifier,

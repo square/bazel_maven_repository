@@ -16,6 +16,7 @@ package kramer
 
 import com.google.common.collect.ImmutableListMultimap
 import com.squareup.tools.maven.resolution.Artifact
+import java.security.MessageDigest
 import org.apache.maven.model.Dependency
 
 /*
@@ -36,11 +37,14 @@ internal val acceptedScopes = setOf("compile", "runtime")
  * Core Library Stuff
  */
 
-// h/t swankjesse
-infix fun <A, B, C> Pair<A, B>.tre(c: C) = Triple(first, second, c)
-
 fun <K, V> Iterable<Pair<K, V>>.toImmutableListMultimap(): ImmutableListMultimap<K, V> =
   ImmutableListMultimap.Builder<K, V>().apply { forEach { (k, v) -> put(k, v) } }.build()
+
+fun ByteArray.sha256(): String {
+  val md = MessageDigest.getInstance("SHA-256")
+  val digest = md.digest(this)
+  return digest.fold("", { str, it -> str + "%02x".format(it) })
+}
 
 /*
  *  Utilities to extract bazel paths/packages/targets from maven artifacts and dependencies.

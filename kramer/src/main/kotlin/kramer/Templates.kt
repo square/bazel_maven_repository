@@ -14,7 +14,38 @@
  */
 package kramer
 
-internal fun aarTemplate(
+import java.nio.file.Path
+
+internal fun fetchArtifactTemplate(prefix: String, path: Path) = """
+package(default_visibility = ["//visibility:public"])
+filegroup(
+    name = "$prefix",
+    srcs = ["$path"],
+)
+"""
+
+const val AAR_DOWNLOAD_BUILD_FILE = """
+package(default_visibility = ["//visibility:public"])
+exports_files(["AndroidManifest.xml", "classes.jar"])
+
+filegroup(
+  name = "resources",
+  srcs = glob(["res/**/*"])
+)
+
+filegroup(
+  name = "assets",
+  srcs = glob(["assets/**/*"])
+)
+
+filegroup(
+  name = "proguard",
+  srcs = glob(["proguard.txt"])
+)
+
+"""
+
+internal fun mavenAarTemplate(
   target: String,
   coordinate: String,
   customPackage: String,
@@ -44,7 +75,7 @@ android_library(
 )
 """
 
-internal fun jarTemplate(
+internal fun mavenJarTemplate(
   target: String,
   coordinate: String,
   jarPath: String,

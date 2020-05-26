@@ -11,16 +11,41 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 #
-load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kt_jvm_test")
+load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kt_jvm_library", "kt_jvm_test")
+
+kt_jvm_library(
+    name = "testlib",
+    testonly = True,
+    srcs = ["TestUtils.kt"],
+    deps = [
+        "@maven//com/github/ajalt:clikt",
+    ],
+)
 
 kt_jvm_test(
-    name = "KramerIntegrationTest",
+    name = "FetchArtifactIntegrationTest",
     size = "large",
-    srcs = ["KramerIntegrationTest.kt"],
+    srcs = ["FetchArtifactIntegrationTest.kt"],
     data = glob(["*.json"]),
     friends = ["//src/main/kotlin/kramer"],
-    test_class = "kramer.integration.KramerIntegrationTest",
+    test_class = "kramer.integration.FetchArtifactIntegrationTest",
     deps = [
+        ":testlib",
+        "//src/main/kotlin/kramer",
+        "@maven//com/google/truth",
+        "@maven//junit",
+    ],
+)
+
+kt_jvm_test(
+    name = "GenerateMavenRepoIntegrationTest",
+    size = "large",
+    srcs = ["GenerateMavenRepoIntegrationTest.kt"],
+    data = glob(["*.json"]),
+    friends = ["//src/main/kotlin/kramer"],
+    test_class = "kramer.integration.GenerateMavenRepoIntegrationTest",
+    deps = [
+        ":testlib",
         "//src/main/kotlin/kramer",
         "@maven//com/google/truth",
         "@maven//junit",

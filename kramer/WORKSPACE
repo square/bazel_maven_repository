@@ -1,10 +1,23 @@
 workspace(name = "test_workspace")
 
-# Set up maven
-local_repository(
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+MAVEN_REPOSITORY_RULES_VERSION = "996a0672205cd11210bf119c62f7a967c454b3d2"
+
+MAVEN_REPOSITORY_RULES_CHECKSUM = "bd4d5c15a780f56ceee77efe33519dbdef93ffaa83e5c5a28be3189b5e0723d6"
+
+# Create a bazel workspace to represent the maven universe.
+http_archive(
     name = "maven_repository_rules",
-    path = "..",
+    sha256 = MAVEN_REPOSITORY_RULES_CHECKSUM,
+    strip_prefix = "bazel_maven_repository-%s" % MAVEN_REPOSITORY_RULES_VERSION,
+    type = "zip",
+    urls = ["https://github.com/square/bazel_maven_repository/archive/%s.zip" % MAVEN_REPOSITORY_RULES_VERSION],
 )
+#local_repository(
+#    name = "maven_repository_rules",
+#    path = "..",
+#)
 
 load("@maven_repository_rules//maven:maven.bzl", "maven_repository_specification")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
