@@ -3,8 +3,8 @@
 A bazel ruleset creating an idiomatic bazel representation of a maven repository using a
 pinned list of artifacts.
 
-Release: `1.2.0`
-PrereleasE: `2.0.0-alpha`
+Release: `1.2.0` <br/>
+Prerelease: `2.0.0-alpha`
 
 | Version | Sha |
 | ------- | --- |
