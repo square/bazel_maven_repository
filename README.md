@@ -99,7 +99,7 @@ error output should suggest configuration to either pin them or exclude them.
 
 Translation from maven group/artifact coordinates to bazel package/target coordinates is naive but
 orderly.  The logic mirrors the layout of a maven repository, with groupId elements (separated by
-`.`) turning into a package hierarchy, and the artifact_id turning into a bazel target. 
+`.`) turning into a package hierarchy, and the artifactId turning into a bazel target. 
 
 ## Artifact Configuration
 ### Sha verification
@@ -256,7 +256,7 @@ dependencies on a lot of maven download code which is not needed in a bazel buil
 ### Packaging
 
 Optionally, an artifact may specify a packaging. Valid artifact coordinates are listable this way:
-`"group_id:artifact_id:version[:packaging]"`
+`"groupId:artifactId:version[:packaging]"`
 
 At present, only `jar` (default) and `aar` packaging are supported.
 
