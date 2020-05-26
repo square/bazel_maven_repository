@@ -15,7 +15,6 @@ load(":exec.bzl", "exec")
 def _fetch_artifact_impl(ctx):
     repository_root_path = ctx.path(".")
     verbosity = int(ctx.os.environ.get("BAZEL_MAVEN_VERBOSITY", "0"))
-    print(verbosity)
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
     spec = ":".join(ctx.attr.artifact.split(":")[0:3])  # Strip extra artifact elements.
     args = [
