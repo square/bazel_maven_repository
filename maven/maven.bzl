@@ -14,7 +14,7 @@
 # Description:
 #   A repository rule intended to be used in populating @maven_repository.
 #
-load(":artifacts.bzl", "artifacts")
+load(":artifacts.bzl", artifact_utils = "artifacts")
 load(":jvm.bzl", "raw_jvm_import")
 load(":fetch.bzl", "fetch_artifact")
 load(":sets.bzl", "sets")
@@ -75,21 +75,6 @@ _generate_maven_repository = repository_rule(
     },
 )
 
-# Legacy implementation of the maven_jvm_artifact rule (for snippet use only)
-def _maven_jvm_artifact(coordinates, name, visibility, deps = [], use_jetifier = False, **kwargs):
-    print("WARNING: maven_jvm_artifact is deprecated, please use raw_jvm_import")
-    artifact = artifacts.parse_spec(coordinates)
-    path = artifacts.artifact_path(artifact, "jar", artifact.classifier)
-    file_target = "@%s//%s:%s" % (artifacts.fetch_repo(artifact), "maven", path)
-    raw_jvm_import(
-        name = name,
-        deps = deps,
-        visibility = visibility,
-        jar = file_target,
-        jetify = use_jetifier,
-        **kwargs
-    )
-
 def _unsupported_keys(keys_list):
     return sets.difference(sets.copy_of(artifact_config_properties.values), sets.copy_of(keys_list))
 
@@ -113,7 +98,7 @@ def _validate_artifacts(artifact_definitions):
                 list(unsupported_keys),
                 list(artifact_config_properties.values),
             )]
-        artifact = artifacts.parse_spec(spec)  # Basic sanity check.
+        artifact = artifact_utils.parse_spec(spec)  # Basic sanity check.
 
         if not bool(artifact.version):
             errors += ["""Artifact "%s" missing version""" % spec]
@@ -132,64 +117,23 @@ def _validate_artifacts(artifact_definitions):
     if bool(errors):
         fail("Errors found:\n    %s" % "\n    ".join(errors))
 
-# The implementation of maven_repository_specification.
-#
-# Validates that all artifacts have sha hashes (or are in insecure_artifacts), splits artifacts into groups based on
-# their groupId, generates a fetch rule for each artifact, and calls the rule which generates the internal bazel
-# repository which replicates the maven repo structure.
-#
-def _maven_repository_specification(
-        name,
-        use_jetifier,
-        jetifier_excludes,
-        ignore_legacy_android_support_artifacts = False,
-        artifact_declarations = {},
-        insecure_artifacts = [],
-        build_substitutes = {},
-        dependency_target_substitutes = {},
-        repository_urls = {"central": "https://repo1.maven.org/maven2"}):
-    if len(repository_urls) == 0:
-        fail("You must specify at least one repository root url.")
-    if len(artifact_declarations) == 0:
-        fail("You must register at least one artifact.")
-
-    _validate_artifacts(artifact_declarations)
-
-    for artifact_spec, properties in artifact_declarations.items():
-        artifact = artifacts.parse_spec(artifact_spec)
-        sha256 = properties.get(artifact_config_properties.SHA256, None)
-        fetch_artifact(
-            name = artifacts.fetch_repo(artifact),
-            # Don't use the un-parsed spec, because it may have the type which we shouldn't have.
-            artifact = artifact.original_spec,
-            sha256 = sha256,
-            repository_urls = repository_urls,
-        )
-
-    config = struct(
-        name = name,
-        target_substitutes = dependency_target_substitutes,
-        use_jetifier = use_jetifier,
-        jetifier_excludes = jetifier_excludes if use_jetifier else [],
-        ignore_legacy_android_support_artifacts = ignore_legacy_android_support_artifacts,
-        maven_rules_repository = "maven_repository_rules",
-        artifacts = artifact_declarations,
-    )
-    _generate_maven_repository(
-        name = name,
-        config = config.to_json(),
-        repository_urls = repository_urls,
-    )
-
 ####################
 # PUBLIC FUNCTIONS #
 ####################
 
 # Creates java or android library targets from maven_hosted .jar/.aar files. This should only
-# be used in build_snippets, as it is no longer the solution the underlying code generates.
-def maven_jvm_artifact(artifact, name = None, deps = [], visibility = ["//visibility:public"], **kwargs):
-    # redirect to _maven_jvm_artifact, so we can externally use the name "artifact" but internally use artifact_spec
-    _maven_jvm_artifact(coordinates = artifact, name = name, deps = deps, visibility = visibility, **kwargs)
+# be used in build_snippets, as it is no longer the solution that the underlying code generates.
+# All raw_jvm_import properties are passed through.
+def maven_jvm_artifact(artifact, visibility = ["//visibility:public"], **kwargs):
+    print("WARNING: maven_jvm_artifact is deprecated, please use raw_jvm_import")
+    artifact_struct = artifact_utils.parse_spec(artifact)
+    path = artifact_utils.artifact_path(artifact_struct, "jar")
+    file_target = "@%s//%s:%s" % (artifact_utils.fetch_repo(artifact_struct), "maven", path)
+    raw_jvm_import(
+        visibility = visibility,
+        jar = file_target,
+        **kwargs
+    )
 
 # Description:
 #   Generates the bazel repo and download logic for each artifact (and repository URL prefixes) in the WORKSPACE
@@ -239,21 +183,41 @@ def maven_repository_specification(
         ignore_legacy_android_support_artifacts = False,
 
         # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
-        repository_urls = ["https://repo1.maven.org/maven2"]):
+        repository_urls = {"central": "https://repo1.maven.org/maven2"}):
     # Define repository rule for the jetifier tooling. It may end up unused, but the repo needs to
     # be defined.
     jetifier_init()
 
-    # Redirected to _maven_repository_specification to allow the public parameter "artifacts" without conflicting
-    # with the artifact utility struct.
-    _maven_repository_specification(
+    if len(repository_urls) == 0:
+        fail("You must specify at least one repository root url.")
+    if len(artifacts) == 0:
+        fail("You must register at least one artifact.")
+
+    _validate_artifacts(artifacts)
+
+    for artifact_spec, properties in artifacts.items():
+        artifact_struct = artifact_utils.parse_spec(artifact_spec)
+        sha256 = properties.get(artifact_config_properties.SHA256, None)
+        fetch_artifact(
+            name = artifact_utils.fetch_repo(artifact_struct),
+            # Don't use the un-parsed spec, because it may have the type which we shouldn't have.
+            artifact = artifact_struct.original_spec,
+            sha256 = sha256,
+            repository_urls = repository_urls,
+        )
+
+    config = struct(
         name = name,
-        artifact_declarations = artifacts,
-        insecure_artifacts = insecure_artifacts,
-        build_substitutes = build_substitutes,
-        dependency_target_substitutes = dependency_target_substitutes,
+        target_substitutes = dependency_target_substitutes,
         use_jetifier = use_jetifier,
-        repository_urls = repository_urls,
-        jetifier_excludes = jetifier_excludes,
+        jetifier_excludes = jetifier_excludes if use_jetifier else [],
         ignore_legacy_android_support_artifacts = ignore_legacy_android_support_artifacts,
+        maven_rules_repository = "maven_repository_rules",
+        artifacts = artifacts,
+    )
+
+    _generate_maven_repository(
+        name = name,
+        config = config.to_json(),
+        repository_urls = repository_urls,
     )
