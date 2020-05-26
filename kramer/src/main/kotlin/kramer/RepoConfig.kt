@@ -40,7 +40,9 @@ data class RepoConfig(
   @Json(name = "jetifier_excludes")
   val jetifierExcludes: List<String>,
   @Json(name = "maven_rules_repository")
-  val mavenRulesRepository: String
+  val mavenRulesRepository: String,
+  @Json(name = "ignore_legacy_android_support_artifacts")
+  val ignoreLegacyAndroidSupportArtifacts: Boolean = false
 ) {
   val jetifierMatcher by lazy {
     JetifierMatcher(jetifierExcludes.map { ArtifactExclusionGlob(it) })

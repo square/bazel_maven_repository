@@ -120,6 +120,55 @@ class KramerIntegrationTest {
     assertThat(jimfs).doesNotContain("jetify")
   }
 
+  @Test fun jetifierMap() {
+    val args = configFlags("jetifier-map", "gen-maven-repo")
+    val output = cmd.test(args)
+    assertThat(output).contains("Building workspace for 2 artifacts")
+    assertThat(output).contains("Generated 2 build files in ")
+    assertThat(output).contains("Resolved 2 artifacts with 100 threads in")
+
+    val guava = mavenRepo.readBuildFile("com.squareup.picasso")
+    assertThat(guava).contains("jetify = True")
+    assertThat(guava).contains("@maven//androidx/annotation")
+  }
+
+  @Test fun jetifierMapMissingArtifact() {
+    val args = configFlags("jetifier-map-missing-artifact", "gen-maven-repo")
+    val output = cmd.fail(args)
+    assertThat(output).contains("Building workspace for 1 artifacts")
+    assertThat(output).contains("Generated 1 build files in ")
+    assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
+    assertThat(output)
+      .contains("ERROR: Un-declared artifacts referenced in the dependencies of some artifacts.")
+
+    // Picasso declares dep on com.android.support:support-annotation. Want to see androidx here.
+    assertThat(output).contains("androidx.annotation:annotation:SOME_VERSION")
+  }
+
+  @Test fun jetifierPreAndroidXArtifact() {
+    val args = configFlags("android-support", "gen-maven-repo")
+    val output = cmd.fail(args)
+    assertThat(output).contains("Building workspace for 3 artifacts")
+    assertThat(output).contains("Generated 3 build files in ")
+    assertThat(output).contains("Resolved 3 artifacts with 100 threads in")
+
+    assertThat(output)
+      .contains("ERROR: Jetifier enabled but pre-androidX support artifacts specified:")
+    assertThat(output)
+      .contains(
+        "com.android.support:support-annotations (should be androidx.annotation:annotation)"
+      )
+    assertThat(output).doesNotContain("javax.inject:javax.inject")
+  }
+
+  @Test fun jetifierPreAndroidXArtifactDisabled() {
+    val args = configFlags("android-support-check-disabled", "gen-maven-repo")
+    val output = cmd.test(args)
+    assertThat(output).contains("Building workspace for 3 artifacts")
+    assertThat(output).contains("Generated 3 build files in ")
+    assertThat(output).contains("Resolved 3 artifacts with 100 threads in")
+  }
+
   @Test fun largeListOfArtifacts() {
     val args = configFlags("large", "gen-maven-repo")
     val output = cmd.test(args)

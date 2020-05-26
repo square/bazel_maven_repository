@@ -29,14 +29,14 @@ class CommonTest {
   }
 
   @Test fun artifactGroupPath() {
-    assertThat(artifact.groupPath).isEqualTo("a/b/c_d")
+    assertThat(artifact.groupPath).isEqualTo("a/b/c-d")
   }
 
   @Test fun artifactTarget() {
     assertThat(artifact.target).isEqualTo("e_f-g")
   }
   @Test fun dependencyGroupPath() {
-    assertThat(dependency.groupPath).isEqualTo("a/b/c_d")
+    assertThat(dependency.groupPath).isEqualTo("a/b/c-d")
   }
 
   @Test fun dependencyTarget() {

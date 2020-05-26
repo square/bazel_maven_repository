@@ -146,6 +146,7 @@ def _maven_repository_specification(
         use_jetifier,
         jetifier_excludes,
         legacy_underscore,
+        ignore_legacy_android_support_artifacts = False,
         artifact_declarations = {},
         insecure_artifacts = [],
         build_substitutes = {},
@@ -174,6 +175,7 @@ def _maven_repository_specification(
         target_substitutes = dependency_target_substitutes,
         use_jetifier = use_jetifier,
         jetifier_excludes = jetifier_excludes if use_jetifier else [],
+        ignore_legacy_android_support_artifacts = ignore_legacy_android_support_artifacts,
         maven_rules_repository = "maven_repository_rules",
         artifacts = artifact_declarations,
     )
@@ -235,6 +237,12 @@ def maven_repository_specification(
         # Note this is an exact group/artifact match. Future versions may support wildcards.
         jetifier_excludes = DEFAULT_JETIFIER_EXCLUDED_ARTIFACTS,
 
+        # If use_jetifier = True the tool will reject legacy android support artifacts in the
+        # artifact list. During migrations, this setting can cause it to simply ignore them. If
+        # an androidx artifact ought to be there, it will still error, but the mere presence of
+        # an older artifact will not trigger an error.
+        ignore_legacy_android_support_artifacts = False,
+
         # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
         repository_urls = ["https://repo1.maven.org/maven2"]):
     # Define repository rule for the jetifier tooling. It may end up unused, but the repo needs to
@@ -253,4 +261,5 @@ def maven_repository_specification(
         use_jetifier = use_jetifier,
         repository_urls = repository_urls,
         jetifier_excludes = jetifier_excludes,
+        ignore_legacy_android_support_artifacts = ignore_legacy_android_support_artifacts,
     )

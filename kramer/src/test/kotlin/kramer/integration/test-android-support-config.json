@@ -1,0 +1,12 @@
+{
+  "artifacts": {
+    "com.android.support:support-annotations:28.0.0": { "insecure": true },
+    "androidx.annotation:annotation:1.1.0": { "insecure": true },
+    "javax.inject:javax.inject:1": { "insecure": true }
+  },
+  "jetifier_excludes": [],
+  "maven_rules_repository": "maven_repository_rules",
+  "name": "maven",
+  "target_substitutes": {},
+  "use_jetifier": true
+}

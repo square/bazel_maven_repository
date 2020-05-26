@@ -35,6 +35,11 @@ internal fun GenerateMavenRepo.handleUnresolvedArtifacts(unresolved: Set<String>
   kontext.out { "ERROR: Failed to resolve the following artifacts: $unresolved" }
 }
 
+internal fun GenerateMavenRepo.handlePreAndroidXArtifacts(preX: Set<String>) {
+  kontext.out { "ERROR: Jetifier enabled but pre-androidX support artifacts specified:" }
+  preX.forEach { kontext.out { "    $it (should be ${JETIFIER_ARTIFACT_MAPPING[it]})" } }
+}
+
 internal fun GenerateMavenRepo.handleMissingArtifacts(remainder: Map<String, IndexEntry>) {
   kontext.out { "ERROR: Un-declared artifacts referenced in the dependencies of some artifacts." }
   kontext.out { "Please exclude the following or add them to your artifact configuration list." }
