@@ -11,7 +11,7 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 
-load(":jetifier.bzl", "jetify_utils")
+load(":jetifier.bzl", "jetify_jar")
 
 # Description:
 #   A custom import rule that doesn't return an ijar, instead returning the raw .jar file as
@@ -40,7 +40,7 @@ def _raw_jvm_import(ctx):
     Supplied jar label (%s) transitively included more than one binary jar and one (optional)
     source jar.  Found: %s, %s""" % (ctx.file.jar, jars, source_jars))
 
-    jars = [jetify_utils.jetify_jar(ctx, jars[0])] if (ctx.attr.jetify) else jars
+    jars = [jetify_jar(ctx, jars[0])] if (ctx.attr.jetify) else jars
     default_info = DefaultInfo(
         files = depset(jars),
         runfiles = ctx.runfiles(jars),
