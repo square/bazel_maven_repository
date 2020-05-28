@@ -15,7 +15,6 @@
 # Utilities for processing maven artifact coordinates.
 #
 
-_artifact_template = "{group_path}/{artifact_id}/{version}/{artifact_id}-{version}.{suffix}"
 
 # Builds a struct containing the basic coordinate elements of a maven artifact spec.
 def _parse_spec(artifact_spec):
@@ -40,19 +39,7 @@ def _fetch_repo(artifact):
     artifact_elements = artifact.artifact_id.replace("-", ".").split(".")
     return "_".join(group_elements + artifact_elements).replace("-", "_")
 
-def _package_path(artifact):
-    return artifact.group_id.replace(".", "/")
-
-def _artifact_path(artifact, suffix, classifier = None):
-    return _artifact_template.format(
-        group_path = _package_path(artifact),
-        artifact_id = artifact.artifact_id,
-        version = artifact.version,
-        suffix = suffix,
-    )
-
 artifacts = struct(
-    artifact_path = _artifact_path,
     parse_spec = _parse_spec,
     fetch_repo = _fetch_repo,
 )

@@ -22,7 +22,7 @@ java_library(
 # com.google.dagger:dagger:{version}
 raw_jvm_import(
     name = "dagger-api",
-    jar = "@com_google_dagger_dagger//maven:com/google/dagger/dagger/{version}/dagger-{version}.jar",
+    jar = "@com_google_dagger_dagger//maven:com/google/dagger/dagger/{version}/maven-jar-dagger-{version}-classes.jar",
     deps = [
        "@maven//javax/inject:javax_inject",
     ],

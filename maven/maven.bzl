@@ -124,10 +124,23 @@ def _validate_artifacts(artifact_definitions):
 # Creates java or android library targets from maven_hosted .jar/.aar files. This should only
 # be used in build_snippets, as it is no longer the solution that the underlying code generates.
 # All raw_jvm_import properties are passed through.
-def maven_jvm_artifact(artifact, visibility = ["//visibility:public"], **kwargs):
+#
+# For rare cases where the packaging isn't jar, use packaging=. e.g. Guava, which is a "bundle"
+def maven_jvm_artifact(artifact, packaging = "jar", visibility = ["//visibility:public"], **kwargs):
     print("WARNING: maven_jvm_artifact is deprecated, please use raw_jvm_import")
     artifact_struct = artifact_utils.parse_spec(artifact)
-    path = artifact_utils.artifact_path(artifact_struct, "jar")
+    dir = "{group_path}/{artifact_id}/{version}".format(
+        group_path = artifact_struct.group_id.replace(".", "/"),
+        artifact_id = artifact_struct.artifact_id,
+        version = artifact_struct.version
+    )
+    path = "{dir}/maven-{packaging}-{artifact_id}-{version}-classes.{suffix}".format(
+        dir = dir,
+        packaging = packaging,
+        artifact_id = artifact_struct.artifact_id,
+        version = artifact_struct.version,
+        suffix = "jar"
+    )
     file_target = "@%s//%s:%s" % (artifact_utils.fetch_repo(artifact_struct), "maven", path)
     raw_jvm_import(
         visibility = visibility,
