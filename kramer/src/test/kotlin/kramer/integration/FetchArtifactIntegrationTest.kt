@@ -22,7 +22,6 @@ import com.squareup.tools.maven.resolution.Repositories.MAVEN_CENTRAL
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import java.nio.file.Files
-import kramer.AAR_DOWNLOAD_BUILD_FILE
 import kramer.FetchArtifactCommand
 import kramer.Kramer
 import org.junit.Test
@@ -53,7 +52,7 @@ class FetchArtifactIntegrationTest {
     fetchCommand.assertExists("com/google/guava/guava/18.0/guava-18.0.pom")
     fetchCommand.assertExists("com/google/guava/guava/18.0/guava-18.0.jar")
     val build = Files.readAllLines(fetchCommand.dir.resolve("BUILD.bazel")).joinToString("\n")
-    assertThat(build).contains("srcs = [\"com/google/guava/guava/18.0/guava-18.0.jar\"]")
+    assertThat(build).contains("com/google/guava/guava/18.0/guava-18.0.jar")
   }
 
   @Test fun fetchJarWithSha() {
@@ -66,7 +65,17 @@ class FetchArtifactIntegrationTest {
     fetchCommand.assertExists("com/google/guava/guava/18.0/guava-18.0.pom")
     fetchCommand.assertExists("com/google/guava/guava/18.0/guava-18.0.jar")
     val build = Files.readAllLines(fetchCommand.dir.resolve("BUILD.bazel")).joinToString("\n")
-    assertThat(build).contains("srcs = [\"com/google/guava/guava/18.0/guava-18.0.jar\"]")
+    assertThat(build).contains("com/google/guava/guava/18.0/guava-18.0.jar")
+  }
+
+  @Test fun fetchJarInsecurelyWithSources() {
+    val output = cmd.test(flags("com.google.guava:guava:18.0"), baos)
+    assertThat(output).contains("Fetched com.google.guava:guava:18.0 insecurely in")
+    fetchCommand.assertExists("com/google/guava/guava/18.0/guava-18.0.pom")
+    fetchCommand.assertExists("com/google/guava/guava/18.0/guava-18.0.jar")
+    val build = Files.readAllLines(fetchCommand.dir.resolve("BUILD.bazel")).joinToString("\n")
+    assertThat(build).contains("com/google/guava/guava/18.0/guava-18.0.jar")
+    assertThat(build).contains("com/google/guava/guava/18.0/guava-18.0-sources.jar")
   }
 
   @Test fun fetchAarInsecurely() {
@@ -76,7 +85,20 @@ class FetchArtifactIntegrationTest {
     fetchCommand.assertExists("classes.jar")
     fetchCommand.assertExists("AndroidManifest.xml")
     val build = Files.readAllLines(fetchCommand.dir.resolve("BUILD.bazel")).joinToString("\n")
-    assertThat(build).contains(AAR_DOWNLOAD_BUILD_FILE)
+    assertThat(build).contains("classes.jar")
+    assertThat(build).contains("AndroidManifest.xml")
+  }
+
+  @Test fun fetchAarInsecurelyWithSources() {
+    val output = cmd.test(flags("androidx.core:core:1.1.0"), baos)
+    assertThat(output).contains("Fetched androidx.core:core:1.1.0 insecurely in")
+    fetchCommand.assertExists("androidx/core/core/1.1.0/core-1.1.0.pom")
+    fetchCommand.assertExists("classes.jar")
+    fetchCommand.assertExists("AndroidManifest.xml")
+    val build = Files.readAllLines(fetchCommand.dir.resolve("BUILD.bazel")).joinToString("\n")
+    assertThat(build).contains("classes.jar")
+    assertThat(build).contains("AndroidManifest.xml")
+    assertThat(build).contains("androidx/core/core/1.1.0/core-1.1.0-sources.jar")
   }
 
   @Test fun testUnavailableArtifact() {

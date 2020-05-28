@@ -219,7 +219,6 @@ class GenerateMavenRepo(
       else -> mavenJarTemplate(
         target = resolved.target,
         coordinate = resolved.coordinate,
-        jarPath = "${resolved.main.path}",
         jetify = jetify,
         deps = deps,
         fetchRepo = resolved.fetchRepoPackage(),
