@@ -55,7 +55,8 @@ def jetifier_init():
 
 # jetify_jar based on https://github.com/bazelbuild/tools_android/pull/5
 def jetify_jar(ctx, jar):
-    jetified_outfile = ctx.actions.declare_file("%s-jetified.%s" % (ctx.attr.name, jar.extension))
+    basename = jar.basename.rsplit(".", 1)[0]
+    jetified_outfile = ctx.actions.declare_file("%s-jetified.%s" % (basename, jar.extension))
     jetify_args = ctx.actions.args()
     jetify_args.add_all(["-l", "error"])
     jetify_args.add_all(["-o", jetified_outfile])

@@ -30,7 +30,6 @@ import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.FET
 import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.NOT_FOUND
 import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.SUCCESSFUL
 import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.SUCCESSFUL.FOUND_IN_CACHE
-import com.squareup.tools.maven.resolution.FileSpec
 import com.squareup.tools.maven.resolution.Repositories.Companion.DEFAULT
 import com.squareup.tools.maven.resolution.ResolvedArtifact
 import java.io.IOException
@@ -40,13 +39,12 @@ import java.nio.file.Files.createDirectories
 import java.nio.file.Files.newInputStream
 import java.nio.file.Files.write
 import java.nio.file.Path
-import java.nio.file.Paths
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.StandardOpenOption.CREATE
 import java.util.zip.ZipInputStream
 import kotlin.system.measureTimeMillis
 
-internal class FetchArtifactCommand() : CliktCommand(name = "fetch-artifact") {
+internal class FetchArtifactCommand : CliktCommand(name = "fetch-artifact") {
   internal val workspace: Path by option(
     "--workspace",
     help = "Path to the workspace to be generated."
@@ -139,20 +137,26 @@ internal class FetchArtifactCommand() : CliktCommand(name = "fetch-artifact") {
             "ERROR: $file hash ($hash) is not the expected hash ($sha256)"
           }
         }
-        val buildFile = workspace.resolve(prefix).resolve("BUILD.bazel")
+        val targetDir = workspace.resolve(prefix)
+        val buildFile = targetDir.resolve("BUILD.bazel")
+        val targetClassesJar = jarPath(resolved)
+        val absoluteClassesJar = workspace.resolve(prefix).resolve(targetClassesJar)
         when (resolved.model.packaging.trim()) {
           "aar" -> {
-            linkOrCopy(resolved.pom)
+            linkOrCopy(resolved.pom.localFile, targetDir.resolve(resolved.pom.path))
             unzip(resolved.main.localFile, buildFile.parent)
-            if (Files.exists(resolved.sources.localFile)) linkOrCopy(resolved.sources)
-            val jars = jarsList(workspace, prefix, Paths.get("classes.jar"), resolved.sources.path)
+            linkOrCopy(targetDir.resolve("classes.jar"), absoluteClassesJar)
+            if (Files.exists(resolved.sources.localFile))
+              linkOrCopy(resolved.sources.localFile, targetDir.resolve(resolved.sources.path))
+            val jars = jarsList(workspace, prefix, targetClassesJar, resolved.sources.path)
             write(buildFile, aarArtifactTemplate(prefix, jars).lines(), CREATE)
           }
           else -> {
-            linkOrCopy(resolved.pom)
-            linkOrCopy(resolved.main)
-            if (Files.exists(resolved.sources.localFile)) linkOrCopy(resolved.sources)
-            val jars = jarsList(workspace, prefix, resolved.main.path, resolved.sources.path)
+            linkOrCopy(resolved.pom.localFile, workspace.resolve(prefix).resolve(resolved.pom.path))
+            linkOrCopy(resolved.main.localFile, absoluteClassesJar)
+            if (Files.exists(resolved.sources.localFile))
+              linkOrCopy(resolved.sources.localFile, targetDir.resolve(resolved.sources.path))
+            val jars = jarsList(workspace, prefix, targetClassesJar, resolved.sources.path)
             write(buildFile, fetchArtifactTemplate(prefix, jars).lines(), CREATE)
           }
         }
@@ -167,15 +171,18 @@ internal class FetchArtifactCommand() : CliktCommand(name = "fetch-artifact") {
     }
   }
 
+  private fun jarPath(artifact: ResolvedArtifact, infix: String = "") =
+    with(artifact.model) {
+      artifact.pom.path.resolveSibling("maven-$packaging-$artifactId-$version-classes.jar")
+    }
+
   private fun jarsList(workspace: Path, prefix: String, sources: Path, main: Path) =
     listOf(main) +
       if (Files.exists(workspace.resolve(prefix).resolve(sources))) listOf(sources)
       else listOf()
 
-  private fun linkOrCopy(file: FileSpec) {
-    createDirectories(workspace.resolve(prefix).resolve(file.path).parent)
-    val destination = workspace.resolve(prefix).resolve(file.path)
-    val source = file.localFile
+  private fun linkOrCopy(source: Path, destination: Path) {
+    createDirectories(destination.parent)
     try {
       Files.createLink(destination, source)
       kontext.verbose { "Hard link created from $source to $destination" }
