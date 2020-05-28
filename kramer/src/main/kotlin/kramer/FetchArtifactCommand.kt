@@ -40,6 +40,7 @@ import java.nio.file.Files.createDirectories
 import java.nio.file.Files.newInputStream
 import java.nio.file.Files.write
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.StandardOpenOption.CREATE
 import java.util.zip.ZipInputStream
@@ -77,7 +78,8 @@ internal class FetchArtifactCommand() : CliktCommand(name = "fetch-artifact") {
     val status: FetchStatus
   )
 
-  private fun fetch(spec: String): FetchResult {
+  // TODO make fetchSources configurable, so CI or other systems can disable them and avoid work.
+  private fun fetch(spec: String, fetchSources: Boolean = true): FetchResult {
     val repoList = if (kontext.repositories.isNotEmpty()) kontext.repositories else DEFAULT
     val resolver = ArtifactResolver(
       cacheDir = kontext.localRepository,
@@ -89,9 +91,13 @@ internal class FetchArtifactCommand() : CliktCommand(name = "fetch-artifact") {
       "ERROR: Could not resolve $spec! Attempted from ${repoList.map { it.url }}"
     }
     val status = resolver.downloadArtifact(artifact = resolved)
+
+    // Make these parallel fetches.
+    if (fetchSources) resolver.downloadSources(artifact = resolved)
+
     when (status) {
       is SUCCESSFUL -> {}
-      is INVALID_HASH ->  kontext.exit(1) {
+      is INVALID_HASH -> kontext.exit(1) {
         "ERROR: Invalid maven hashes for $spec from ${repoList.map { it.url }}. " +
           "Check that ${resolved.main.localFile} is the expected file."
       }
@@ -138,12 +144,16 @@ internal class FetchArtifactCommand() : CliktCommand(name = "fetch-artifact") {
           "aar" -> {
             linkOrCopy(resolved.pom)
             unzip(resolved.main.localFile, buildFile.parent)
-            write(buildFile, AAR_DOWNLOAD_BUILD_FILE.lines(), CREATE)
+            if (Files.exists(resolved.sources.localFile)) linkOrCopy(resolved.sources)
+            val jars = jarsList(workspace, prefix, Paths.get("classes.jar"), resolved.sources.path)
+            write(buildFile, aarArtifactTemplate(prefix, jars).lines(), CREATE)
           }
           else -> {
             linkOrCopy(resolved.pom)
             linkOrCopy(resolved.main)
-            write(buildFile, fetchArtifactTemplate(prefix, resolved.main.path).lines(), CREATE)
+            if (Files.exists(resolved.sources.localFile)) linkOrCopy(resolved.sources)
+            val jars = jarsList(workspace, prefix, resolved.main.path, resolved.sources.path)
+            write(buildFile, fetchArtifactTemplate(prefix, jars).lines(), CREATE)
           }
         }
       }
@@ -156,6 +166,11 @@ internal class FetchArtifactCommand() : CliktCommand(name = "fetch-artifact") {
       }
     }
   }
+
+  private fun jarsList(workspace: Path, prefix: String, sources: Path, main: Path) =
+    listOf(main) +
+      if (Files.exists(workspace.resolve(prefix).resolve(sources))) listOf(sources)
+      else listOf()
 
   private fun linkOrCopy(file: FileSpec) {
     createDirectories(workspace.resolve(prefix).resolve(file.path).parent)

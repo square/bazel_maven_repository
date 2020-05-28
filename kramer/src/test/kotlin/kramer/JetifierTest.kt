@@ -18,6 +18,7 @@ import com.google.common.truth.Truth.assertThat
 import com.squareup.tools.maven.resolution.ArtifactFetcher
 import com.squareup.tools.maven.resolution.ArtifactFile
 import com.squareup.tools.maven.resolution.ArtifactResolver
+import com.squareup.tools.maven.resolution.FileSpec
 import com.squareup.tools.maven.resolution.PomFile
 import java.nio.file.Paths
 import org.apache.maven.model.Repository
@@ -83,6 +84,9 @@ class JetifierTest {
     private val resolver = ArtifactResolver(
       fetcher = object : ArtifactFetcher {
         override fun fetchArtifact(artifactFile: ArtifactFile, repositories: List<Repository>) =
+          throw UnsupportedOperationException("Fake")
+
+        override fun fetchFile(fetchFile: FileSpec, repositories: List<Repository>) =
           throw UnsupportedOperationException("Fake")
 
         override fun fetchPom(pom: PomFile, repositories: List<Repository>) =

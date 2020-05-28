@@ -16,34 +16,48 @@ package kramer
 
 import java.nio.file.Path
 
-internal fun fetchArtifactTemplate(prefix: String, path: Path) = """
-package(default_visibility = ["//visibility:public"])
-filegroup(
-    name = "$prefix",
-    srcs = ["$path"],
-)
-"""
+internal fun fetchArtifactTemplate(prefix: String, jars: List<Path>): String {
+  val srcsText = jars.joinToString("") { "\n            \"$it\"," }
 
-const val AAR_DOWNLOAD_BUILD_FILE = """
-package(default_visibility = ["//visibility:public"])
-exports_files(["AndroidManifest.xml", "classes.jar"])
+  return """
+    package(default_visibility = ["//visibility:public"])
+    filegroup(
+        name = "$prefix",
+        srcs = [$srcsText
+        ],
+    )
+    """.trimIndent()
+}
 
-filegroup(
-  name = "resources",
-  srcs = glob(["res/**/*"])
-)
+internal fun aarArtifactTemplate(prefix: String, jars: List<Path>): String {
+  val srcsText = jars.joinToString("") { "\n            \"$it\"," }
 
-filegroup(
-  name = "assets",
-  srcs = glob(["assets/**/*"])
-)
+  return """
+    package(default_visibility = ["//visibility:public"])
+    exports_files(["AndroidManifest.xml"])
 
-filegroup(
-  name = "proguard",
-  srcs = glob(["proguard.txt"])
-)
+    filegroup(
+        name = "$prefix",
+        srcs = [$srcsText
+        ],
+    )
 
-"""
+    filegroup(
+        name = "resources",
+        srcs = glob(["res/**/*"])
+    )
+
+    filegroup(
+        name = "assets",
+        srcs = glob(["assets/**/*"])
+    )
+
+    filegroup(
+        name = "proguard",
+        srcs = glob(["proguard.txt"])
+    )
+    """.trimIndent()
+}
 
 internal fun mavenAarTemplate(
   target: String,
@@ -58,7 +72,7 @@ internal fun mavenAarTemplate(
 # $coordinate raw classes
 raw_jvm_import(
     name = "${target}_classes",
-    jar = "$fetchRepo:classes.jar",$jetify
+    jar = "$fetchRepo",$jetify
     deps = [$deps],
 )
 
@@ -78,7 +92,6 @@ android_library(
 internal fun mavenJarTemplate(
   target: String,
   coordinate: String,
-  jarPath: String,
   jetify: String,
   deps: String,
   fetchRepo: String,
@@ -88,7 +101,7 @@ internal fun mavenJarTemplate(
 # $coordinate
 raw_jvm_import(
     name = "$target",
-    jar = "$fetchRepo:$jarPath",
+    jar = "$fetchRepo",
     visibility = $visibility,$jetify
     deps = [$deps],$testonly
 )

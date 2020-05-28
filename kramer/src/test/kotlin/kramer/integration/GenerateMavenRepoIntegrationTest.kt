@@ -62,6 +62,10 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(output).contains("Building workspace for 1 artifacts")
     assertThat(output).contains("Generated 1 build files in ")
     assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
+    val build = mavenRepo.readBuildFile("javax.inject")
+    assertThat(build).contains("javax.inject:javax.inject:1")
+    assertThat(build).contains("name = \"javax_inject\"")
+    assertThat(build).contains("@javax_inject_javax_inject//maven")
   }
 
   @Test fun excludesSuccess() {
@@ -124,9 +128,9 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(output).contains("Generated 2 build files in ")
     assertThat(output).contains("Resolved 2 artifacts with 100 threads in")
 
-    val guava = mavenRepo.readBuildFile("com.squareup.picasso")
-    assertThat(guava).contains("jetify = True")
-    assertThat(guava).contains("@maven//androidx/annotation")
+    val picasso = mavenRepo.readBuildFile("com.squareup.picasso")
+    assertThat(picasso).contains("jetify = True")
+    assertThat(picasso).contains("@maven//androidx/annotation")
   }
 
   @Test fun jetifierMapMissingArtifact() {
