@@ -33,7 +33,7 @@ jobs:
         mkdir -p "${GITHUB_WORKSPACE}/bin/"
         mv bazelisk-darwin-amd64 "${GITHUB_WORKSPACE}/bin/bazel"
         chmod a+x "${GITHUB_WORKSPACE}/bin/bazel"
-        setenv BAZELISK_GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+        set-env BAZELISK_GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
     - name: Test All
       run: |
         "${GITHUB_WORKSPACE}/bin/bazel" test //...
@@ -67,7 +67,7 @@ jobs:
         mkdir -p "${GITHUB_WORKSPACE}/bin/"
         mv bazelisk-linux-amd64 "${GITHUB_WORKSPACE}/bin/bazel"
         chmod a+x "${GITHUB_WORKSPACE}/bin/bazel"
-        setenv BAZELISK_GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+        set-env BAZELISK_GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
     - name: Test All
       run: |
         "${GITHUB_WORKSPACE}/bin/bazel" test //...
