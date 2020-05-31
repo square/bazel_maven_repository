@@ -24,8 +24,6 @@ def _fetch_artifact_impl(ctx):
     ]
     for repo, url in ctx.attr.repository_urls.items():
         args.append("--repository=%s|%s" % (repo, url))
-    if verbosity > 1:
-        args.append("--verbose")
     if verbosity > 0:
         args.append("--verbose")
     args.append("fetch-artifact")
