@@ -206,11 +206,14 @@ internal class FetchArtifactCommand : CliktCommand(name = "fetch-artifact") {
           val path = root.resolve(entry.name).normalize()
           if (!path.startsWith(root)) throw IOException("Invalid ZIP")
           if (entry.isDirectory) createDirectories(path)
-          else Files.newOutputStream(path).use { out ->
-            var len: Int
-            val buffer = ByteArray(1024)
-            while (stream.read(buffer).also { len = it } > 0) {
-              out.write(buffer, 0, len)
+          else {
+            createDirectories(path.parent)
+            Files.newOutputStream(path).use { out ->
+              var len: Int
+              val buffer = ByteArray(1024)
+              while (stream.read(buffer).also { len = it } > 0) {
+                out.write(buffer, 0, len)
+              }
             }
           }
           entry = stream.nextEntry

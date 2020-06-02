@@ -101,6 +101,11 @@ class FetchArtifactIntegrationTest {
     assertThat(build).contains("androidx/core/core/1.1.0/core-1.1.0-sources.jar")
   }
 
+  @Test fun testGooglePlay() {
+    val output = cmd.test(flags("com.google.android.gms:play-services-base:17.1.0"), baos)
+    assertThat(output).contains("Fetched com.google.android.gms:play-services-base:17.1.0 insecurely")
+  }
+
   @Test fun testUnavailableArtifact() {
     val output = cmd.fail(flags(artifactSpec = "com.google.noguava:noguava:18.0"), baos)
     assertThat(output).contains("ERROR: Could not resolve com.google.noguava:noguava:18.0!")
