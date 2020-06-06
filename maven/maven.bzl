@@ -48,7 +48,7 @@ def _generate_maven_repository_impl(ctx):
     for repo, url in ctx.attr.repository_urls.items():
         args.append("--repository=%s|%s" % (repo, url))
     args.append("gen-maven-repo")
-    args.append("--threads=100")
+    args.append("--threads=%s" % ctx.attr.fetch_threads)
     args.append("--workspace=%s" % workspace_root)
     args.append("--configuration=%s" % config_json)
     ctx.report_progress("Preparing maven repository")
@@ -65,6 +65,7 @@ _generate_maven_repository = repository_rule(
     attrs = {
         "repository_urls": attr.string_dict(mandatory = True),
         "config": attr.string(mandatory = True),
+        "fetch_threads": attr.int(mandatory= True),
         "maven_rules_repository": attr.string(mandatory = False, default = "maven_repository_rules"),
         "_kramer_exec": attr.label(
             executable = True,
@@ -132,14 +133,14 @@ def maven_jvm_artifact(artifact, packaging = "jar", visibility = ["//visibility:
     dir = "{group_path}/{artifact_id}/{version}".format(
         group_path = artifact_struct.group_id.replace(".", "/"),
         artifact_id = artifact_struct.artifact_id,
-        version = artifact_struct.version
+        version = artifact_struct.version,
     )
     path = "{dir}/maven-{packaging}-{artifact_id}-{version}-classes.{suffix}".format(
         dir = dir,
         packaging = packaging,
         artifact_id = artifact_struct.artifact_id,
         version = artifact_struct.version,
-        suffix = "jar"
+        suffix = "jar",
     )
     file_target = "@%s//%s:%s" % (artifact_utils.fetch_repo(artifact_struct), "maven", path)
     raw_jvm_import(
@@ -196,7 +197,11 @@ def maven_repository_specification(
         ignore_legacy_android_support_artifacts = False,
 
         # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
-        repository_urls = {"central": "https://repo1.maven.org/maven2"}):
+        repository_urls = {"central": "https://repo1.maven.org/maven2"},
+
+        # Optional number of threads to use while fetching and generating build targets for maven artifacts.
+        fetch_threads = 100,
+        ):
     # Define repository rule for the jetifier tooling. It may end up unused, but the repo needs to
     # be defined.
     jetifier_init()
@@ -233,4 +238,5 @@ def maven_repository_specification(
         name = name,
         config = config.to_json(),
         repository_urls = repository_urls,
+        fetch_threads = fetch_threads,
     )

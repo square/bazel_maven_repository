@@ -86,6 +86,7 @@ android_library(
     assets = ["$fetchRepo:assets"],
     assets_dir = "assets",
     deps = [":${target}_classes"] + [$deps],$testonly
+    exports = [":${target}_classes"],
 )
 """
 
