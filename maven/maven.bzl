@@ -65,7 +65,7 @@ _generate_maven_repository = repository_rule(
     attrs = {
         "repository_urls": attr.string_dict(mandatory = True),
         "config": attr.string(mandatory = True),
-        "fetch_threads": attr.int(mandatory= True),
+        "fetch_threads": attr.int(mandatory = True),
         "maven_rules_repository": attr.string(mandatory = False, default = "maven_repository_rules"),
         "_kramer_exec": attr.label(
             executable = True,
@@ -200,8 +200,7 @@ def maven_repository_specification(
         repository_urls = {"central": "https://repo1.maven.org/maven2"},
 
         # Optional number of threads to use while fetching and generating build targets for maven artifacts.
-        fetch_threads = 100,
-        ):
+        fetch_threads = 100):
     # Define repository rule for the jetifier tooling. It may end up unused, but the repo needs to
     # be defined.
     jetifier_init()
