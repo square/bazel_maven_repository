@@ -38,6 +38,7 @@ artifact_config_properties = struct(
 def _generate_maven_repository_impl(ctx):
     workspace_root = ctx.path(".")
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
+    threads = ctx.os.environ.get("BAZEL_MAVEN_FETCH_THREADS", "%s" % ctx.attr.fetch_threads)
     config_json = ctx.path("config.json")
     ctx.file(config_json, "%s" % ctx.attr.config)
     args = [
@@ -48,7 +49,7 @@ def _generate_maven_repository_impl(ctx):
     for repo, url in ctx.attr.repository_urls.items():
         args.append("--repository=%s|%s" % (repo, url))
     args.append("gen-maven-repo")
-    args.append("--threads=%s" % ctx.attr.fetch_threads)
+    args.append("--threads=%s" % threads)
     args.append("--workspace=%s" % workspace_root)
     args.append("--configuration=%s" % config_json)
     ctx.report_progress("Preparing maven repository")
