@@ -97,7 +97,7 @@ maven_repository_specification(
             "insecure": True,
             "build_snippet": OKIO_SNIPPET,
         },
-        "com.squareup.tools.build:maven-archeologist:0.0.4": {"insecure": True},
+        "com.squareup.tools.build:maven-archeologist:0.0.6": {"insecure": True},
         "junit:junit:4.13": {
             "insecure": True,
             "testonly": True,
