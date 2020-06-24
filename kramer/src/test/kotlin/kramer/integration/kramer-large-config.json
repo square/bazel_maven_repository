@@ -1,0 +1,4 @@
+{
+  "name": "maven",
+  "repositories": [ { "id": "fake", "url": "localhost:0" } ]
+}

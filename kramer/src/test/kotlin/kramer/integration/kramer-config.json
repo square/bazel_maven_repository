@@ -1,0 +1,8 @@
+{
+  "name": "maven",
+  "repositories": [
+    { "id": "central", "url": "https://repo.maven.apache.org/maven2" },
+    { "id": "google-android", "url": "https://dl.google.com/dl/android/maven2" },
+    { "id": "spring_io_plugins", "url": "https://repo.spring.io/plugins-release" }
+  ]
+}

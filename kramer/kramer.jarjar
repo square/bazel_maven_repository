@@ -1,0 +1,8 @@
+rule com.** kramer_shaded.com.@1
+rule org.apache.** kramer_shaded.org.@1
+rule kotlinx.** kramer_shaded.kotlinx.@1
+rule okhttp3.** kramer_shaded.okhttp3.@1
+rule okio.** kramer_shaded.okio.@1
+keep kramer.**
+keep org.xml.sax.**
+keep kotlin.reflect.jvm.internal.impl.load.java.*

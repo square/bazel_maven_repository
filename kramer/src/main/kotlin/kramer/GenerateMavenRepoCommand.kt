@@ -26,9 +26,11 @@ import com.github.ajalt.clikt.parameters.types.int
 import com.github.ajalt.clikt.parameters.types.path
 import com.squareup.tools.maven.resolution.ArtifactResolver
 import com.squareup.tools.maven.resolution.FetchStatus
+import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.FETCH_ERROR
 import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.SUCCESSFUL
 import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.SUCCESSFUL.FOUND_IN_CACHE
 import com.squareup.tools.maven.resolution.Repositories.Companion.DEFAULT
+import com.squareup.tools.maven.resolution.ResolutionResult
 import com.squareup.tools.maven.resolution.ResolvedArtifact
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -73,8 +75,7 @@ class GenerateMavenRepo(
   private val workspaceName: String by option("--workspace-name")
       .defaultLazy { workspace.fileName.toString() }
 
-  private val configFile by option("--configuration").path(mustExist = true)
-      .required()
+  private val specificationFile by option("--specification").path(mustExist = true).required()
 
   private val threadCount: Int by option("--threads").int()
       .default(1)
@@ -128,8 +129,8 @@ class GenerateMavenRepo(
   @FlowPreview
   @ExperimentalCoroutinesApi
   override fun run() {
-    val repoConfig = parseRepoConfig(configFile)
-    with(repoConfig.validate()) {
+    val repoSpec = kontext.parseJson(specificationFile, RepositorySpecification::class)
+    with(repoSpec.validate()) {
       if (isNotEmpty()) {
         forEach { kontext.out { "ERROR: Invalid config: ${it.message}" } }
         throw ProgramResult(1)
@@ -141,10 +142,10 @@ class GenerateMavenRepo(
     val unresolved = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
     val declaredArtifactSlugs = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
     val benchmark = measureTimeMillis {
-      if (repoConfig.artifacts.isNotEmpty()) Files.createDirectories(workspace)
+      if (repoSpec.artifacts.isNotEmpty()) Files.createDirectories(workspace)
       runBlocking {
-        kontext.out { "Building workspace for ${repoConfig.artifacts.size} artifacts" }
-        repoConfig.artifacts.entries.asFlow()
+        kontext.out { "Building workspace for ${repoSpec.artifacts.size} artifacts" }
+        repoSpec.artifacts.entries.asFlow()
             .onEach {
               // TODO: Validate per-artifact configuration (currently validated in starlark).
             }
@@ -160,25 +161,25 @@ class GenerateMavenRepo(
                 else -> unknownPackageFlow(result, exit)
               }
             }
-            .map { resolution -> applyTemplate(resolution, repoConfig, seen) }
+            .map { resolution -> applyTemplate(resolution, repoSpec, seen) }
             .flowOn(Dispatchers.IO)
             .toListMultimapFlow() // Associate template operations with their build file
             .flatMapMerge(threadCount) { (path, filledTemplates) ->
-              flow { emit(writeBuildFiles(path, filledTemplates)) }
+              flow { emit(writeBuildFiles(path, filledTemplates, repoSpec.rulesLabel)) }
             }
             .count()
             .let { kontext.out { "Generated $it build files in $workspace" } }
 
         // Check for, and handle, any errors or mis-specifications.
-        if (declaredArtifactSlugs.size != repoConfig.artifacts.size) {
+        if (declaredArtifactSlugs.size != repoSpec.artifacts.size) {
           exit.set(1)
-          handleDuplicateArtifacts(repoConfig)
+          handleDuplicateArtifacts(repoSpec)
         }
         if (unresolved.isNotEmpty()) {
           exit.set(1)
           handleUnresolvedArtifacts(unresolved)
         }
-        if (repoConfig.useJetifier && !repoConfig.ignoreLegacyAndroidSupportArtifacts) {
+        if (repoSpec.useJetifier && !repoSpec.ignoreLegacyAndroidSupportArtifacts) {
           with(declaredArtifactSlugs.intersect(JETIFIER_ARTIFACT_MAPPING.keys)) {
             if (isNotEmpty()) {
               exit.set(1)
@@ -204,13 +205,13 @@ class GenerateMavenRepo(
 
   private fun writeBuildFiles(
     path: Path,
-    templateApplications: Collection<TemplateApplication>
+    templateApplications: Collection<TemplateApplication>,
+    mavenRulesRepo: String
   ): Path {
     val android =
       templateApplications.map { it.resolution is AarArtifactResolution }
           .reduce { b, acc -> b || acc }
     val androidHeader = if (android) ANDROID_LOAD_HEADER else ""
-    val mavenRulesRepo = "maven_repository_rules"
     val content = templateApplications.joinToString(
         "\n",
         prefix = HEADER + androidHeader + RAW_LOAD_HEADER_TEMPLATE.format(mavenRulesRepo)
@@ -222,7 +223,7 @@ class GenerateMavenRepo(
 
   private fun applyTemplate(
     resolution: ArtifactResolution,
-    repoConfig: RepoConfig,
+    repoConfig: RepositorySpecification,
     seen: ConcurrentHashMap<String, IndexEntry>
   ): Pair<Path, TemplateApplication> {
     val (resolved, config) = resolution
@@ -361,14 +362,21 @@ class GenerateMavenRepo(
       val entry = seen.getOrPut(slug) { IndexEntry() }
       entry.versions.add(artifact.version)
       declaredArtifactSlugs.add(slug)
-      var resolved: ResolvedArtifact? = null
+      var tmp: ResolutionResult? = null
       val time = measureTimeMillis {
-        resolved = resolver.resolveArtifact(artifact)
+        tmp = resolver.resolve(artifact)
       }
-      resolved?.let {
+      val result = requireNotNull(tmp)
+      result.artifact?.let {
         kontext.info { "Resolved ${it.coordinate} in ${time / 1000.0} seconds" }
         emit(FileArtifactResolution(it, config))
       } ?: run {
+        when (val status = result.status) {
+          is FETCH_ERROR -> {
+            kontext.out { "ERROR: Could not resolve ${artifact.coordinate}: ${status.message}" }
+            status.error?.let { kontext.info { it.formatStackTrace() } }
+          }
+        }
         unresolved.add(artifact.coordinate)
         exit.set(1)
       }
@@ -408,7 +416,7 @@ private fun prepareDependencies(
   resolved: ResolvedArtifact,
   config: ArtifactConfig,
   seen: ConcurrentHashMap<String, GenerateMavenRepo.IndexEntry>,
-  repoConfig: RepoConfig
+  repoConfig: RepositorySpecification
 ): Sequence<String> {
   if (!config.snippet.isNullOrBlank()) return sequenceOf()
   val substitutes =

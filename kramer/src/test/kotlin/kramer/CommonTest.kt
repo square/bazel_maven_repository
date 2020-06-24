@@ -48,6 +48,13 @@ class CommonTest {
     assertThat(artifact.fetchRepoPackage()).isEqualTo("@a_b_c_d_e_f_g//maven")
   }
 
+  @Test fun testFormatException() {
+    val error = Exception("test_msg")
+    assertThat(error.formatStackTrace()).contains("java.lang.Exception: test_msg")
+    assertThat(error.formatStackTrace())
+        .contains("at kramer.CommonTest.testFormatException(CommonTest.kt")
+  }
+
   @Test fun filterOutNonBuildDeps() {
     val model = Model().apply {
       groupId = "blah.foo"

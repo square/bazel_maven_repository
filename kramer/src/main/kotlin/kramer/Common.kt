@@ -19,6 +19,8 @@ import com.squareup.tools.maven.resolution.Artifact
 import java.security.MessageDigest
 import org.apache.maven.model.Dependency
 import org.apache.maven.model.Model
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
 
 /*
  * Constants
@@ -45,6 +47,12 @@ fun ByteArray.sha256(): String {
   val md = MessageDigest.getInstance("SHA-256")
   val digest = md.digest(this)
   return digest.fold("", { str, it -> str + "%02x".format(it) })
+}
+
+fun Throwable.formatStackTrace(): String {
+  val baos = ByteArrayOutputStream()
+  printStackTrace(PrintStream(baos))
+  return baos.toString()
 }
 
 fun zeroOrOneOf(vararg conditions: Boolean): Boolean {

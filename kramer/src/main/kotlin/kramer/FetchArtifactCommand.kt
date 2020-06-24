@@ -30,7 +30,6 @@ import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.FET
 import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.NOT_FOUND
 import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.SUCCESSFUL
 import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.SUCCESSFUL.FOUND_IN_CACHE
-import com.squareup.tools.maven.resolution.Repositories.Companion.DEFAULT
 import com.squareup.tools.maven.resolution.ResolvedArtifact
 import java.io.IOException
 import java.nio.file.Files
@@ -78,16 +77,16 @@ internal class FetchArtifactCommand : CliktCommand(name = "fetch-artifact") {
 
   // TODO make fetchSources configurable, so CI or other systems can disable them and avoid work.
   private fun fetch(spec: String, fetchSources: Boolean = true): FetchResult {
-    val repoList = if (kontext.repositories.isNotEmpty()) kontext.repositories else DEFAULT
+    val repositories = kontext.repositories
     val resolver = ArtifactResolver(
       cacheDir = kontext.localRepository,
       suppressAddRepositoryWarnings = true,
-      repositories = repoList,
+      repositories = repositories,
       modelInterceptor = ::filterBuildDeps
     )
     val artifact = resolver.artifactFor(spec)
     val resolved: ResolvedArtifact = resolver.resolveArtifact(artifact) ?: kontext.exit(1) {
-      "ERROR: Could not resolve $spec! Attempted from ${repoList.map { it.url }}"
+      "ERROR: Could not resolve $spec! Attempted from ${repositories.map { it.url }}"
     }
     val status = resolver.downloadArtifact(artifact = resolved)
 
@@ -97,7 +96,7 @@ internal class FetchArtifactCommand : CliktCommand(name = "fetch-artifact") {
     when (status) {
       is SUCCESSFUL -> {}
       is INVALID_HASH -> kontext.exit(1) {
-        "ERROR: Invalid maven hashes for $spec from ${repoList.map { it.url }}. " +
+        "ERROR: Invalid maven hashes for $spec from ${repositories.map { it.url }}. " +
           "Check that ${resolved.main.localFile} is the expected file."
       }
       is FETCH_ERROR -> kontext.exit(1) {
@@ -105,13 +104,13 @@ internal class FetchArtifactCommand : CliktCommand(name = "fetch-artifact") {
           "(${status.responseCode}) ${status.message}"
       }
       is NOT_FOUND -> kontext.exit(1) {
-        "ERROR: Artifact $spec not found at ${repoList.first().url}/${resolved.main.path}"
+        "ERROR: Artifact $spec not found at ${repositories.first().url}/${resolved.main.path}"
       }
       is ERROR -> kontext.exit(1) {
         // Errors from all download attempts, so enumerate them.
         "ERROR: Problem fetching main artifact for $spec:\n" +
           status.errors.entries.joinToString("\n") { (repoId, status) ->
-            val repo = repoList.find { it.id == repoId }!!
+            val repo = repositories.find { it.id == repoId }!!
             val message =
               when (status) {
                 is NOT_FOUND -> "(404 - not found)"
@@ -172,7 +171,7 @@ internal class FetchArtifactCommand : CliktCommand(name = "fetch-artifact") {
     }
   }
 
-  private fun jarPath(artifact: ResolvedArtifact, infix: String = "") =
+  private fun jarPath(artifact: ResolvedArtifact) =
     with(artifact.model) {
       artifact.pom.path.resolveSibling("maven-$packaging-$artifactId-$version-classes.jar")
     }

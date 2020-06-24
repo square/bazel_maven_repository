@@ -17,18 +17,18 @@ package kramer
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.findOrSetObject
 import com.github.ajalt.clikt.core.subcommands
-import com.github.ajalt.clikt.parameters.options.convert
 import com.github.ajalt.clikt.parameters.options.counted
 import com.github.ajalt.clikt.parameters.options.default
-import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.options.required
 import com.github.ajalt.clikt.parameters.types.path
+import com.squareup.tools.maven.resolution.GlobalConfig
+import com.squareup.tools.maven.resolution.Repositories
 import java.io.PrintStream
 import java.nio.file.FileSystem
 import java.nio.file.FileSystems
 import java.nio.file.Path
 import org.apache.maven.model.Repository
-import org.apache.maven.model.RepositoryPolicy
 
 fun main(vararg argv: String) = Kramer()
   .subcommands(FetchArtifactCommand(), GenerateMavenRepo())
@@ -39,33 +39,18 @@ internal class Kramer(
   private val output: PrintStream = System.out
 ) : CliktCommand() {
 
-  private val repositories: List<Repository> by option("--repository").convert { p ->
-    val fragments = p.split("|", limit = 4).toMutableList()
-    val (id, url) = fragments
-    var snapshots = "false"
-    var releases = "true"
-    with(fragments) {
-      this.removeAt(0)
-      this.removeAt(0)
-      for (param in this) {
-        val elements = param.split("=", limit = 2)
-        if (elements.size != 2) fail("Invalid parameter $param to repository spec $p")
-        val (type, value) = elements
-        if (value !in setOf("true", "false")) fail("Invalid boolean $value in $p")
-        when (type) {
-          "snapshots" -> snapshots = value
-          "releases" -> releases = value
-          else -> fail("Invalid repository policy type $type in $p")
-        }
-      }
-    }
-    Repository().apply {
-      this.id = id
-      this.url = url
-      this.releases = RepositoryPolicy().apply { this.enabled = releases }
-      this.snapshots = RepositoryPolicy().apply { this.enabled = snapshots }
-    }
-  }.multiple()
+  /** the settings overrides that might be supplied differently in different environments */
+  private val settingsFile by option(
+    "--settings",
+    envvar = "BAZEL_MAVEN_SETTINGS",
+    help = "Settings which can be optionally specified, which override values in the main config"
+  ).path(mustExist = true)
+
+  /** the settings from the main specification that are used by all commands */
+  private val configFile by option(
+    "--config",
+    help = "Settings which can be optionally specified, which override values in the main config"
+  ).path(mustExist = true).required()
 
   private val verbosity: Int by option(
     "-v", "--verbose",
@@ -80,21 +65,41 @@ internal class Kramer(
     .path(canBeFile = false, canBeSymlink = false, canBeDir = true)
     .default(fs.getPath("${System.getProperties()["user.home"]}", ".m2/repository"))
 
-  internal val kontext by findOrSetObject { Kontext() }
+  internal val kontext by findOrSetObject {
+    Kontext(verbosity = verbosity, localRepository = localRepository, output = output)
+  }
 
   override fun run() {
-    kontext.output = output
-    kontext.repositories = repositories
-    kontext.verbosity = verbosity
-    kontext.localRepository = localRepository
+    GlobalConfig.verbose = verbosity > 0
+    GlobalConfig.debug = verbosity > 1
+    kontext.settings = kontext.parseJson(settingsFile, Settings())
+    kontext.config = kontext.parseJson(configFile, KramerConfig::class)
   }
 }
 
-internal class Kontext {
-  var output: PrintStream = System.out
-  lateinit var repositories: List<Repository>
-  var verbosity: Int = 0
-  lateinit var localRepository: Path
+internal class Kontext(
+  val verbosity: Int = 0,
+  val localRepository: Path,
+  val output: PrintStream = System.out
+) {
+  lateinit var settings: Settings
+
+  lateinit var config: KramerConfig
+
+  val repositories: List<Repository> by lazy {
+    val mirrors = settings.mirrors.map { it.id to it.url }.toMap()
+    val repositories = config.repositories.ifEmpty { Repositories.DEFAULT }
+    repositories.map { repo ->
+      mirrors[repo.id]?.let { mirror ->
+        Repository().apply {
+          id = repo.id
+          url = mirror
+          releases = repo.releases
+          snapshots = repo.snapshots
+        }
+      } ?: repo
+    }
+  }
 
   fun out(newline: Boolean = true, msg: () -> String) {
     output.print(msg.invoke())

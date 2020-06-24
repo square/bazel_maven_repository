@@ -17,17 +17,19 @@ def _fetch_artifact_impl(ctx):
     verbosity = int(ctx.os.environ.get("BAZEL_MAVEN_VERBOSITY", "0"))
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
     spec = ":".join(ctx.attr.artifact.split(":")[0:3])  # Strip extra artifact elements.
+    config_json = ctx.path("kramer_config.json")
+    ctx.file(config_json, ctx.attr.config)
+
     args = [
         exec.java_bin(ctx),
         "-jar",
         exec.exec_jar(ctx.path("."), ctx.attr._kramer_exec),
     ]
-    for repo, url in ctx.attr.repository_urls.items():
-        args.append("--repository=%s|%s" % (repo, url))
     if verbosity > 1:
         args.append("--verbose")
     if verbosity > 0:
         args.append("--verbose")
+    args.append("--config=%s" % config_json)
     args.append("fetch-artifact")
     args.append("--workspace=%s" % ctx.path("."))
     if bool(ctx.attr.sha256):
@@ -47,7 +49,7 @@ fetch_artifact = repository_rule(
     attrs = {
         "artifact": attr.string(mandatory = True),
         "sha256": attr.string(),
-        "repository_urls": attr.string_dict(mandatory = True),
+        "config": attr.string(mandatory = True),
         "_kramer_exec": attr.label(
             executable = True,
             cfg = "host",

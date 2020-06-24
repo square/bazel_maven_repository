@@ -17,9 +17,9 @@ package kramer
 import com.squareup.tools.maven.resolution.MavenVersion
 import kramer.GenerateMavenRepo.IndexEntry
 
-internal fun GenerateMavenRepo.handleDuplicateArtifacts(repoConfig: RepoConfig) {
+internal fun GenerateMavenRepo.handleDuplicateArtifacts(specification: RepositorySpecification) {
   kontext.out { "ERROR: Duplicate artifact entries are not permitted:" }
-  repoConfig.artifacts.keys
+  specification.artifacts.keys
     .map { spec ->
       val (groupId, artifactId, version) = spec.split(":")
       "$groupId:$artifactId" to version

@@ -11,11 +11,27 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 #
+load(":jarjar.bzl", "jar_jar")
+
 java_binary(
-    name = "kramer",
+    name = "kramer_bin",
     main_class = "kramer.KramerKt",
     visibility = ["//visibility:public"],
     runtime_deps = [
         "//src/main/kotlin/kramer",
     ],
+)
+
+jar_jar(
+    name = "kramer_shaded",
+    input_jar = ":kramer_bin_deploy.jar",
+    rules = "kramer.jarjar",
+    visibility = ["//visibility:public"],
+)
+
+java_binary(
+    name = "jarjar_runner",
+    main_class = "org.pantsbuild.jarjar.Main",
+    visibility = ["//visibility:public"],
+    runtime_deps = ["@maven//org/pantsbuild:jarjar"],
 )

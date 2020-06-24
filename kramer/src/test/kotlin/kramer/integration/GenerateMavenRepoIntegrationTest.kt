@@ -17,21 +17,21 @@ package kramer.integration
 import com.github.ajalt.clikt.core.subcommands
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
-import com.squareup.tools.maven.resolution.Repositories.GOOGLE_ANDROID
-import com.squareup.tools.maven.resolution.Repositories.MAVEN_CENTRAL
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
+import java.nio.file.Files
+import java.nio.file.Paths
 import kramer.GenerateMavenRepo
+import kramer.Kontext
 import kramer.Kramer
+import kramer.RepositorySpecification
 import kramer.UnknownPackagingStrategy
-import kramer.parseRepoConfig
+import kramer.parseJson
 import org.junit.After
 import org.junit.Ignore
 import org.junit.Test
-import java.io.ByteArrayOutputStream
-import java.io.PrintStream
 import java.nio.file.FileSystems
-import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.Paths
 
 /**
  * Integration tests for [GenerateMavenRepoCommand]. These are dependent on access to the network
@@ -45,12 +45,6 @@ class GenerateMavenRepoIntegrationTest {
   private val tmpDir = Files.createTempDirectory("resolution-test-")
   private val cacheDir = tmpDir.resolve("localcache")
   private val runfiles = Paths.get(System.getenv("JAVA_RUNFILES")!!)
-  val repoArgs = listOf(
-      "--repository=${MAVEN_CENTRAL.id}|${MAVEN_CENTRAL.url}",
-      "--repository=${GOOGLE_ANDROID.id}|${GOOGLE_ANDROID.url}",
-      "--repository=spring_io_plugins|https://repo.spring.io/plugins-release",
-      "--local_maven_cache=$cacheDir"
-  )
   private val baos = ByteArrayOutputStream()
   private val mavenRepo = GenerateMavenRepo()
   private val cmd = Kramer(output = PrintStream(baos)).subcommands(mavenRepo)
@@ -353,16 +347,8 @@ class GenerateMavenRepoIntegrationTest {
 
     assertThat(Files.exists(cacheDir.resolve("junit/junit/4.13/junit-4.13.pom"))).isTrue()
     val output2 = cmd.test(
-        configFlags(
-            "large",
-            "gen-maven-repo",
-            workspace = "workspace2",
-            kramerArgs = listOf(
-                "--repository=foo|localhost:0", // force fake repo for this run - all cache.
-                "--local_maven_cache=$cacheDir"
-            )
-        ),
-        baos
+      configFlags("large", "gen-maven-repo", customConfig = true, workspace = "workspace2"),
+      baos
     )
     val result2 = timingMatcher.find(output2)
     assertWithMessage("Expected to match ${timingMatcher.pattern}").that(result2)
@@ -399,11 +385,12 @@ class GenerateMavenRepoIntegrationTest {
   }
 
   private fun readLabelIndexFromConfigOf(label: String): Map<String, MutableSet<String>> {
-    val config = parseRepoConfig(
+    val spec = Kontext(localRepository = cacheDir).parseJson(
         FileSystems.getDefault()
-            .getPath("$runfiles/$relativeDir/$packageDir/test-$label-config.json")
+            .getPath("$runfiles/$relativeDir/$packageDir/test-$label-config.json"),
+        RepositorySpecification::class
     )
-    return config.artifacts.keys.asSequence()
+    return spec.artifacts.keys.asSequence()
         .map { spec ->
           val (groupId, art, _) = spec.split(":")
           return@map groupId to "\"" + art.replace(".", "_") + "\""
@@ -420,11 +407,20 @@ class GenerateMavenRepoIntegrationTest {
     command: String,
     threads: Int = 100,
     workspace: String = "workspace",
-    kramerArgs: List<String> = repoArgs
-  ) =
-    kramerArgs +
-        command +
-        "--threads=$threads" +
-        "--workspace=$tmpDir/$workspace" +
-        "--configuration=$runfiles/$relativeDir/$packageDir/test-$label-config.json"
+    customConfig: Boolean = false,
+    customSettings: Boolean = false
+  ): List<String> {
+    val testSourceDir = "$runfiles/$relativeDir/$packageDir"
+    val kramerConfig = if (customConfig) "kramer-$label-config.json" else "kramer-config.json"
+    val settings =
+      if (customSettings) listOf("--settings=$testSourceDir/$label-settings.json")
+      else listOf()
+    return settings +
+      "--local_maven_cache=$cacheDir" +
+      "--config=$testSourceDir/$kramerConfig" +
+      command +
+      "--threads=$threads" +
+      "--workspace=$tmpDir/$workspace" +
+      "--specification=$testSourceDir/test-$label-config.json"
+  }
 }
