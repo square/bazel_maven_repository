@@ -173,9 +173,9 @@ class GenerateMavenRepoIntegrationTest {
   @Test fun largeListOfArtifacts() {
     val args = configFlags("large", "gen-maven-repo")
     val output = cmd.test(args, baos)
-    assertThat(output).contains("Building workspace for 468 artifacts")
-    assertThat(output).contains("Generated 229 build files in ")
-    assertThat(output).contains("Resolved 468 artifacts with 100 threads in")
+    assertThat(output).contains("Building workspace for 469 artifacts")
+    assertThat(output).contains("Generated 230 build files in ")
+    assertThat(output).contains("Resolved 469 artifacts with 100 threads in")
   }
 
   // This is the flakiest test design that ever flaked, but we want a sense that there is

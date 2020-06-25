@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableListMultimap
 import com.squareup.tools.maven.resolution.Artifact
 import java.security.MessageDigest
 import org.apache.maven.model.Dependency
+import org.apache.maven.model.Model
 
 /*
  * Constants
@@ -71,3 +72,12 @@ internal fun target(string: String) = string.replace(".", "_")
  * Miscellaneous
  */
 val Dependency.slug: String get() = "$groupId:$artifactId"
+
+/** Filters out any deps not to be propagated to runtime consumers */
+fun filterBuildDeps(model: Model) {
+  model.apply {
+    dependencies = dependencies.filter { dep ->
+      dep.scope.isNullOrBlank() || dep.scope in acceptedScopes
+    }
+  }
+}

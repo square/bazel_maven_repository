@@ -17,6 +17,7 @@ package kramer
 import com.google.common.truth.Truth.assertThat
 import com.squareup.tools.maven.resolution.ArtifactResolver
 import org.apache.maven.model.Dependency
+import org.apache.maven.model.Model
 import org.junit.Test
 
 class CommonTest {
@@ -45,5 +46,49 @@ class CommonTest {
 
   @Test fun fetchRepoPackage() {
     assertThat(artifact.fetchRepoPackage()).isEqualTo("@a_b_c_d_e_f_g//maven")
+  }
+
+  @Test fun filterOutNonBuildDeps() {
+    val model = Model().apply {
+      groupId = "blah.foo"
+      artifactId = "blargh"
+      version = "1.0"
+      dependencies = listOf(
+          Dependency().apply {
+            groupId = "blah.foo"
+            artifactId = "blargh-runtime"
+            version = "1.0"
+            scope = "runtime"
+          },
+          Dependency().apply {
+            groupId = "blah.foo"
+            artifactId = "blargh-compile"
+            version = "1.0"
+            scope = "compile"
+          },
+          Dependency().apply {
+            groupId = "blah.foo"
+            artifactId = "blargh-system"
+            version = "1.0"
+            scope = "system"
+          },
+          Dependency().apply {
+            groupId = "blah.foo"
+            artifactId = "blargh-provided"
+            version = "1.0"
+            scope = "provided"
+          },
+          Dependency().apply {
+            groupId = "blah.foo"
+            artifactId = "blargh-default"
+            version = "1.0"
+          }
+      )
+    }
+    assertThat(model.dependencies).hasSize(5)
+    filterBuildDeps(model)
+    assertThat(model.dependencies).hasSize(3)
+    assertThat(model.dependencies.mapNotNull { it.scope }.toSet())
+        .isEqualTo(setOf("runtime", "compile"))
   }
 }

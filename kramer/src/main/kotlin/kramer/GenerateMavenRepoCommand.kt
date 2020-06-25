@@ -27,7 +27,7 @@ import com.squareup.tools.maven.resolution.ArtifactResolver
 import com.squareup.tools.maven.resolution.FetchStatus
 import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.SUCCESSFUL
 import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.SUCCESSFUL.FOUND_IN_CACHE
-import com.squareup.tools.maven.resolution.Repositories
+import com.squareup.tools.maven.resolution.Repositories.Companion.DEFAULT
 import com.squareup.tools.maven.resolution.ResolvedArtifact
 import java.io.IOException
 import java.net.URI
@@ -321,11 +321,10 @@ class GenerateMavenRepo(
 
   private fun newResolver(): ArtifactResolver {
     return ArtifactResolver(
-      cacheDir = kontext.localRepository,
-      suppressAddRepositoryWarnings = true,
-      repositories =
-      if (kontext.repositories.isNotEmpty()) kontext.repositories
-      else Repositories.DEFAULT
+        cacheDir = kontext.localRepository,
+        suppressAddRepositoryWarnings = true,
+        repositories = if (kontext.repositories.isNotEmpty()) kontext.repositories else DEFAULT,
+        modelInterceptor = ::filterBuildDeps
     )
   }
 }
@@ -357,7 +356,6 @@ private fun prepareDependencies(
   val substitutes =
     repoConfig.targetSubstitutes.getOrElse(resolved.groupId) { mapOf() }
   return resolved.model.dependencies.asSequence()
-    .filter { dep -> dep.scope in acceptedScopes }
     .filter { dep -> !dep.isOptional }
     .filter { dep -> dep.slug !in config.exclude }
     .map { dep ->

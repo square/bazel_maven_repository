@@ -82,7 +82,8 @@ internal class FetchArtifactCommand : CliktCommand(name = "fetch-artifact") {
     val resolver = ArtifactResolver(
       cacheDir = kontext.localRepository,
       suppressAddRepositoryWarnings = true,
-      repositories = repoList
+      repositories = repoList,
+      modelInterceptor = ::filterBuildDeps
     )
     val artifact = resolver.artifactFor(spec)
     val resolved: ResolvedArtifact = resolver.resolveArtifact(artifact) ?: kontext.exit(1) {
