@@ -109,6 +109,12 @@ maven_repository_specification(
         "androidx.collection:collection:1.0.0": {"insecure": True},
         "androidx.lifecycle:lifecycle-common:2.0.0": {"insecure": True},
         "androidx.arch.core:core-common:2.0.0": {"insecure": True},
+
+        # TODO(gruber) support includes: [] in order to allow helpshift to work
+        # Helpshift has bad deps, and so cannot do resource processing without the additional
+        # dependencies. It would require a build snippet, which, being an aar snippet, would be
+        # complicated.
+        # "com.helpshift:android-helpshift-aar:7.8.0": {"insecure": True},
     },
     # Because these apply to all targets within a group, it's specified separately from the artifact list.
     dependency_target_substitutes = {
