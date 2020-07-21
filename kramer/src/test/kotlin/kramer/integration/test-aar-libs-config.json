@@ -1,0 +1,17 @@
+{
+  "artifacts": {
+    "androidx.lifecycle:lifecycle-runtime:2.0.0": {"insecure": true},
+    "androidx.versionedparcelable:versionedparcelable:1.1.0": {"insecure": true},
+    "androidx.annotation:annotation:1.1.0": {"insecure": true},
+    "androidx.collection:collection:1.0.0": {"insecure": true},
+    "androidx.lifecycle:lifecycle-common:2.0.0": {"insecure": true},
+    "androidx.arch.core:core-common:2.0.0": {"insecure": true},
+    "androidx.core:core:1.3.0": { "insecure": true},
+    "com.helpshift:android-helpshift-aar:7.8.0": { "insecure": true}
+  },
+  "jetifier_excludes": [],
+  "maven_rules_repository": "maven_repository_rules",
+  "name": "maven",
+  "target_substitutes": {},
+  "use_jetifier": false
+}

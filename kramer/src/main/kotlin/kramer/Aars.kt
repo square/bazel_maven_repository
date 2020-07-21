@@ -23,13 +23,20 @@ import java.nio.file.FileSystemAlreadyExistsException
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.stream.Collectors
 import javax.xml.parsers.SAXParserFactory
+import kotlin.streams.toList
 
 private val parserFactory = SAXParserFactory.newInstance()
 
+data class AarDetails(
+  val customPackage: String?,
+  val libs: List<Path>
+)
+
 @Throws(IOException::class)
-internal fun extractPackageFromManifest(fromZip: URI): String? {
-  try {
+internal fun extractPackageFromManifest(fromZip: URI): AarDetails? {
+  return try {
     FileSystems.newFileSystem(fromZip, emptyMap<String, Any>())
   } catch (e: FileSystemAlreadyExistsException) {
     FileSystems.getFileSystem(fromZip)
@@ -37,31 +44,41 @@ internal fun extractPackageFromManifest(fromZip: URI): String? {
     .rootDirectories
     .firstOrNull()
     ?.let { root: Path ->
-      Files.walk(root)
-        .filter { path -> path.toString() == "/AndroidManifest.xml" }
-        .findFirst()
-        .orElse(null)
-        ?.let { path ->
-          val xmlText = Files.readAllLines(path).joinToString("")
-          // instancing the SAXParser class
-          val saxParser = parserFactory.newSAXParser()
-          var customPackage: String? = null
-          val handler = object : DefaultHandler() {
-            @Throws(SAXException::class)
-            override fun startElement(
-              uri: String,
-              localName: String,
-              qName: String,
-              attributes: Attributes
-            ) {
-              if (qName == "manifest" || localName == "manifest") {
-                customPackage = attributes.getValue("", "package")
-              }
-            }
+      // Prefilter, so we don't have to walk the whole .aar twice.
+      val files: List<Path> = Files.walk(root)
+        .filter { with("$it") { equals("/AndroidManifest.xml") || startsWith("/libs") } }
+        .collect(Collectors.toList())
+      AarDetails(
+        customPackage = files.filter { path -> path.toString() == "/AndroidManifest.xml" }
+          .map { extractCustomPackage(it) }
+          .firstOrNull(),
+        libs = files.filter {
+          with(it.toString()) {
+            startsWith("/libs") && endsWith(".jar")
           }
-          saxParser.parse(xmlText.byteInputStream(), handler)
-          return customPackage
         }
+      )
     }
-  return null
+}
+
+private fun extractCustomPackage(path: Path): String? {
+  var customPackage: String? = null
+  val xmlText = Files.readAllLines(path).joinToString("")
+  // instancing the SAXParser class
+  val saxParser = parserFactory.newSAXParser()
+  val handler = object : DefaultHandler() {
+    @Throws(SAXException::class)
+    override fun startElement(
+      uri: String,
+      localName: String,
+      qName: String,
+      attributes: Attributes
+    ) {
+      if (qName == "manifest" || localName == "manifest") {
+        customPackage = attributes.getValue("", "package")
+      }
+    }
+  }
+  saxParser.parse(xmlText.byteInputStream(), handler)
+  return customPackage
 }

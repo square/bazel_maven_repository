@@ -205,6 +205,42 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(output).contains("Resolved 2 artifacts with 100 threads in")
   }
 
+  @Test fun aarWithLibs() {
+    val args = configFlags("aar-libs", "gen-maven-repo")
+    val output = cmd.test(args, baos)
+    assertThat(output).contains("Building workspace for 8 artifacts")
+    assertThat(output).contains("Generated 7 build files in ")
+    assertThat(output).contains("Resolved 8 artifacts with 100 threads in")
+
+    val helpshift = mavenRepo.readBuildFile("com.helpshift")
+    val support = mavenRepo.readBuildFile("androidx.core")
+    assertThat(support).contains("deps = [\":core_classes\"] + [] + [")
+
+    assertThat(helpshift).contains("""
+      |    deps = [":android-helpshift-aar_classes"] + [
+      |        ":android-helpshift-aar_libs_logger",
+      |        ":android-helpshift-aar_libs_core",
+      |        ":android-helpshift-aar_libs_NVWebsockets",
+      |        ":android-helpshift-aar_libs_HelpshiftLogger",
+      |        ":android-helpshift-aar_libs_Downloader",
+      |    ] + [],
+      |    exports = [":android-helpshift-aar_classes"] + [
+      |        ":android-helpshift-aar_libs_logger",
+      |        ":android-helpshift-aar_libs_core",
+      |        ":android-helpshift-aar_libs_NVWebsockets",
+      |        ":android-helpshift-aar_libs_HelpshiftLogger",
+      |        ":android-helpshift-aar_libs_Downloader",
+      |    ],""".trimMargin()
+    )
+
+    assertThat(helpshift).contains("""
+      |raw_jvm_import(
+      |    name = "android-helpshift-aar_libs_logger",
+      |    jar = "@com_helpshift_android_helpshift_aar//maven:libs/logger.jar",
+      |)""".trimMargin()
+    )
+  }
+
   @Test fun jetifierMatch() {
     val args = configFlags("jetifier", "gen-maven-repo")
     val output = cmd.test(args, baos)

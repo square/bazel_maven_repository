@@ -110,7 +110,8 @@ class GenerateMavenRepo(
     internal data class AarArtifactResolution(
       override val resolved: ResolvedArtifact,
       override val config: ArtifactConfig,
-      var androidPackage: String
+      var androidPackage: String,
+      var libs: List<Path>
     ) : ArtifactResolution()
 
     internal data class FileArtifactResolution(
@@ -244,7 +245,8 @@ class GenerateMavenRepo(
           deps = deps,
           fetchRepo = resolved.fetchRepoPackage(),
           testonly = testonly,
-          visibility = visibility
+          visibility = visibility,
+          libs = resolution.libs
       )
       is JarArtifactResolution -> mavenJarTemplate(
           target = resolved.target,
@@ -308,10 +310,15 @@ class GenerateMavenRepo(
           try {
             if (Files.exists(resolved.main.localFile)) {
               val uri = URI.create("jar:" + resolved.main.localFile.toUri())
-              extractPackageFromManifest(uri)?.let { customPackage ->
-                emit(AarArtifactResolution(resolution.resolved, resolution.config, customPackage))
+              extractPackageFromManifest(uri)?.let { (customPackage, libs) ->
+                if (customPackage == null) {
+                  kontext.info { "ERROR: Null resource package for ${resolved.coordinate}" }
+                  exit.set(1)
+                } else {
+                  emit(AarArtifactResolution(resolved, config, customPackage, libs))
+                }
               } ?: run {
-                kontext.info { "WARNING: Null package for ${resolved.coordinate}" }
+                kontext.info { "ERROR: Could not extract pieces of aar ${resolved.coordinate}" }
                 exit.set(1)
               }
             } else exit.set(1)
