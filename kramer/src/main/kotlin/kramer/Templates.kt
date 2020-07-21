@@ -107,3 +107,21 @@ raw_jvm_import(
     deps = [$deps],$testonly
 )
 """
+
+internal fun mavenFileTemplate(
+  target: String,
+  coordinate: String,
+  deps: String,
+  fetchRepo: String,
+  testonly: String,
+  visibility: String
+) = """
+# $coordinate
+filegroup(
+    name = "$target",
+    srcs = ["$fetchRepo"],
+    visibility = $visibility
+    data = [$deps],$testonly
+)
+"""
+

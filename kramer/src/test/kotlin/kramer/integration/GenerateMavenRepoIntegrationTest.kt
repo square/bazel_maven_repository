@@ -19,15 +19,19 @@ import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import com.squareup.tools.maven.resolution.Repositories.GOOGLE_ANDROID
 import com.squareup.tools.maven.resolution.Repositories.MAVEN_CENTRAL
-import java.io.ByteArrayOutputStream
-import java.io.PrintStream
-import java.nio.file.Files
-import java.nio.file.Paths
 import kramer.GenerateMavenRepo
 import kramer.Kramer
+import kramer.UnknownPackagingStrategy
+import kramer.parseRepoConfig
 import org.junit.After
 import org.junit.Ignore
 import org.junit.Test
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
+import java.nio.file.FileSystems
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 
 /**
  * Integration tests for [GenerateMavenRepoCommand]. These are dependent on access to the network
@@ -42,17 +46,18 @@ class GenerateMavenRepoIntegrationTest {
   private val cacheDir = tmpDir.resolve("localcache")
   private val runfiles = Paths.get(System.getenv("JAVA_RUNFILES")!!)
   val repoArgs = listOf(
-    "--repository=${MAVEN_CENTRAL.id}|${MAVEN_CENTRAL.url}",
-    "--repository=${GOOGLE_ANDROID.id}|${GOOGLE_ANDROID.url}",
-    "--repository=spring_io_plugins|https://repo.spring.io/plugins-release",
-    "--local_maven_cache=$cacheDir"
+      "--repository=${MAVEN_CENTRAL.id}|${MAVEN_CENTRAL.url}",
+      "--repository=${GOOGLE_ANDROID.id}|${GOOGLE_ANDROID.url}",
+      "--repository=spring_io_plugins|https://repo.spring.io/plugins-release",
+      "--local_maven_cache=$cacheDir"
   )
   private val baos = ByteArrayOutputStream()
   private val mavenRepo = GenerateMavenRepo()
   private val cmd = Kramer(output = PrintStream(baos)).subcommands(mavenRepo)
 
   @After fun tearDown() {
-    tmpDir.toFile().deleteRecursively()
+    tmpDir.toFile()
+        .deleteRecursively()
     check(!Files.exists(cacheDir)) { "Failed to tear down and delete temp directory." }
   }
 
@@ -66,6 +71,51 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(build).contains("javax.inject:javax.inject:1")
     assertThat(build).contains("name = \"javax_inject\"")
     assertThat(build).contains("@javax_inject_javax_inject//maven")
+  }
+
+  @Test fun unknownPackagingFail() {
+    val args = configFlags("unhandled-packaging", "gen-maven-repo")
+    val output =
+      cmd.fail(args + listOf("--unknown-packaging", UnknownPackagingStrategy.FAIL.name), baos)
+    assertThat(output).contains("Building workspace for 1 artifacts")
+    assertThat(output).contains("Generated 1 build files in ")
+    assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
+    assertThat(output)
+        .contains("ERROR: com.squareup.sqldelight:runtime:1.4.0 is not a handled package type, pom")
+  }
+
+  @Test fun unknownPackagingWarn() {
+    val args = configFlags("unhandled-packaging", "gen-maven-repo")
+    val output = cmd.test(
+        args + listOf("--unknown-packaging", UnknownPackagingStrategy.WARN.name),
+        baos
+    )
+    assertThat(output).contains("Building workspace for 1 artifacts")
+    assertThat(output).contains("Generated 1 build files in ")
+    assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
+    assertThat(output)
+        .contains("WARNING: com.squareup.sqldelight:runtime:1.4.0 is not a handled package type, pom")
+    val build = mavenRepo.readBuildFile("com.squareup.sqldelight")
+    assertThat(build).contains("com.squareup.sqldelight:runtime:1.4.0")
+    assertThat(build).contains("filegroup(")
+    assertThat(build).contains("srcs = [\"@com_squareup_sqldelight_runtime//maven\"],")
+
+    println(build)
+  }
+
+  @Test fun unknownPackagingIgnore() {
+    val args = configFlags("unhandled-packaging", "gen-maven-repo")
+    val output = cmd.test(
+        args + listOf("--unknown-packaging", UnknownPackagingStrategy.IGNORE.name),
+        baos
+    )
+    assertThat(output).contains("Building workspace for 1 artifacts")
+    assertThat(output).contains("Generated 1 build files in ")
+    assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
+    val build = mavenRepo.readBuildFile("com.squareup.sqldelight")
+    assertThat(build).contains("com.squareup.sqldelight:runtime:1.4.0")
+    assertThat(build).contains("filegroup(")
+    assertThat(build).contains("srcs = [\"@com_squareup_sqldelight_runtime//maven\"],")
   }
 
   @Test fun excludesSuccess() {
@@ -84,9 +134,9 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
 
     assertThat(output)
-      .contains("ERROR: Un-declared artifacts referenced in the dependencies of some artifacts.")
+        .contains("ERROR: Un-declared artifacts referenced in the dependencies of some artifacts.")
     assertThat(output)
-      .contains(""""org.apache.maven:maven-builder-support:3.6.3": {"insecure": True}""")
+        .contains(""""org.apache.maven:maven-builder-support:3.6.3": {"insecure": True}""")
     assertThat(output).contains(""""exclude": ["org.apache.maven:maven-builder-support"]""")
   }
 
@@ -140,7 +190,7 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(output).contains("Generated 1 build files in ")
     assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
     assertThat(output)
-      .contains("ERROR: Un-declared artifacts referenced in the dependencies of some artifacts.")
+        .contains("ERROR: Un-declared artifacts referenced in the dependencies of some artifacts.")
 
     // Picasso declares dep on com.android.support:support-annotation. Want to see androidx here.
     assertThat(output).contains("androidx.annotation:annotation:SOME_VERSION")
@@ -154,11 +204,11 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(output).contains("Resolved 3 artifacts with 100 threads in")
 
     assertThat(output)
-      .contains("ERROR: Jetifier enabled but pre-androidX support artifacts specified:")
+        .contains("ERROR: Jetifier enabled but pre-androidX support artifacts specified:")
     assertThat(output)
-      .contains(
-        "com.android.support:support-annotations (should be androidx.annotation:annotation)"
-      )
+        .contains(
+            "com.android.support:support-annotations (should be androidx.annotation:annotation)"
+        )
     assertThat(output).doesNotContain("javax.inject:javax.inject")
   }
 
@@ -173,9 +223,27 @@ class GenerateMavenRepoIntegrationTest {
   @Test fun largeListOfArtifacts() {
     val args = configFlags("large", "gen-maven-repo")
     val output = cmd.test(args, baos)
-    assertThat(output).contains("Building workspace for 469 artifacts")
-    assertThat(output).contains("Generated 230 build files in ")
-    assertThat(output).contains("Resolved 469 artifacts with 100 threads in")
+
+    assertWithMessage("missing groups and labels")
+        .that(
+            readLabelIndexFromConfigOf("large")
+                .asSequence()
+                .flatMap { (groupId, arts) ->
+                  val build = mavenRepo.maybeReadBuildFile(groupId)
+                  arts.asSequence()
+                      .filterNot { lbl ->
+                        build?.contains(lbl) ?: false
+                      }
+                      .map { lbl -> "$groupId -> $lbl" }
+                }
+                .sorted()
+                .toList()
+        )
+        .isEmpty()
+
+    assertThat(output).contains("Building workspace for 467 artifacts")
+    assertThat(output).contains("Generated 228 build files in ")
+    assertThat(output).contains("Resolved 467 artifacts with 100 threads in")
   }
 
   // This is the flakiest test design that ever flaked, but we want a sense that there is
@@ -193,41 +261,75 @@ class GenerateMavenRepoIntegrationTest {
 
     val output1 = cmd.test(configFlags("large", "gen-maven-repo"), baos)
     val result1 = timingMatcher.find(output1)
-    assertWithMessage("Expected to match ${timingMatcher.pattern}").that(result1).isNotNull()
+    assertWithMessage("Expected to match ${timingMatcher.pattern}").that(result1)
+        .isNotNull()
     val time1 = result1!!.groupValues[1].toFloat()
     assertWithMessage("Expected non-cached first run, but run took $time1 seconds")
-      .that(time1)
-      .isGreaterThan(4.0f)
+        .that(time1)
+        .isGreaterThan(4.0f)
 
     assertThat(Files.exists(cacheDir.resolve("junit/junit/4.13/junit-4.13.pom"))).isTrue()
     val output2 = cmd.test(
-      configFlags(
-        "large",
-        "gen-maven-repo",
-        workspace = "workspace2",
-        kramerArgs = listOf(
-          "--repository=foo|localhost:0", // force fake repo for this run - all cache.
-          "--local_maven_cache=$cacheDir"
-        )
-      ),
-      baos
+        configFlags(
+            "large",
+            "gen-maven-repo",
+            workspace = "workspace2",
+            kramerArgs = listOf(
+                "--repository=foo|localhost:0", // force fake repo for this run - all cache.
+                "--local_maven_cache=$cacheDir"
+            )
+        ),
+        baos
     )
     val result2 = timingMatcher.find(output2)
-    assertWithMessage("Expected to match ${timingMatcher.pattern}").that(result2).isNotNull()
+    assertWithMessage("Expected to match ${timingMatcher.pattern}").that(result2)
+        .isNotNull()
     val time2 = result2!!.groupValues[1].toFloat()
     assertWithMessage("Expected fast cache run but took $time2 seconds")
-      .that(time2)
-      .isLessThan(3.0f)
+        .that(time2)
+        .isLessThan(3.0f)
 
     assertThat(output2).contains("Resolved 469 artifacts with 100 threads in ")
   }
 
   private fun GenerateMavenRepo.readBuildFile(groupId: String): String {
+    return maybeReadBuildFile(groupId) { buildFile ->
+      assertWithMessage("File does not exist: $buildFile").that(Files.exists(buildFile))
+          .isTrue()
+    }!!
+  }
+
+  private fun GenerateMavenRepo.maybeReadBuildFile(
+    groupId: String,
+    validate: (Path) -> Unit = {}
+  ): String? {
     val groupPath = groupId.replace(".", "/")
     val workspace = workspace.toAbsolutePath()
-    val buildFile = workspace.resolve(groupPath).resolve("BUILD.bazel")
-    assertWithMessage("File does not exist: $buildFile").that(Files.exists(buildFile)).isTrue()
-    return Files.readAllLines(buildFile).joinToString("\n")
+    val buildFile = workspace.resolve(groupPath)
+        .resolve("BUILD.bazel")
+    validate(buildFile)
+    if (Files.exists(buildFile)) {
+      return Files.readAllLines(buildFile)
+          .joinToString("\n")
+    }
+    return null
+  }
+
+  private fun readLabelIndexFromConfigOf(label: String): Map<String, MutableSet<String>> {
+    val config = parseRepoConfig(
+        FileSystems.getDefault()
+            .getPath("$runfiles/$relativeDir/$packageDir/test-$label-config.json")
+    )
+    return config.artifacts.keys.asSequence()
+        .map { spec ->
+          val (groupId, art, _) = spec.split(":")
+          return@map groupId to "\"" + art.replace(".","_") + "\""
+        }
+        .fold(mutableMapOf()) { acc, (groupId, lbl) ->
+          acc.apply {
+            getOrPut(groupId, ::mutableSetOf).add(lbl)
+          }
+        }
   }
 
   private fun configFlags(
@@ -238,8 +340,8 @@ class GenerateMavenRepoIntegrationTest {
     kramerArgs: List<String> = repoArgs
   ) =
     kramerArgs +
-      command +
-      "--threads=$threads" +
-      "--workspace=$tmpDir/$workspace" +
-      "--configuration=$runfiles/$relativeDir/$packageDir/test-$label-config.json"
+        command +
+        "--threads=$threads" +
+        "--workspace=$tmpDir/$workspace" +
+        "--configuration=$runfiles/$relativeDir/$packageDir/test-$label-config.json"
 }

@@ -1,0 +1,10 @@
+{
+  "artifacts": {
+    "com.squareup.sqldelight:runtime:1.4.0": { "insecure": true }
+  },
+  "jetifier_excludes": [],
+  "maven_rules_repository": "maven_repository_rules",
+  "name": "maven",
+  "target_substitutes": {},
+  "use_jetifier": false
+}
