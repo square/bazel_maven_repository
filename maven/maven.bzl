@@ -31,8 +31,10 @@ artifact_config_properties = struct(
     INSECURE = "insecure",
     BUILD_SNIPPET = "build_snippet",
     TESTONLY = "testonly",
+    DEPS = "deps",
+    INCLUDE = "include",
     EXCLUDE = "exclude",
-    values = ["sha256", "insecure", "build_snippet", "testonly", "exclude"],
+    values = ["sha256", "insecure", "build_snippet", "testonly", "deps", "include", "exclude"],
 )
 
 def _generate_maven_repository_impl(ctx):

@@ -47,6 +47,10 @@ fun ByteArray.sha256(): String {
   return digest.fold("", { str, it -> str + "%02x".format(it) })
 }
 
+fun zeroOrOneOf(vararg conditions: Boolean): Boolean {
+  return conditions.map { if (it) 1 else 0 }.reduce { acc, i -> acc + i } <= 1
+}
+
 /*
  *  Utilities to extract bazel paths/packages/targets from maven artifacts and dependencies.
  */
@@ -67,6 +71,23 @@ val Dependency.groupPath: String get() = groupPath(groupId)
 
 internal fun groupPath(string: String) = string.replace(".", "/")
 internal fun target(string: String) = string.replace(".", "_")
+
+/**
+ * Create a dependency from a `groupId:artifactId` pair, with a fake version.
+ * Used when rewriting dependencies in contexts where we don't have a version,
+ * such as "include" or jetifier deps surgery.
+ *
+ * This function can take a more narrowly specified artifact, but will ignore
+ * anything past groupId/artifactId
+ */
+internal fun unversionedDependency(it: String): Dependency {
+  val (groupId, artifactId) = it.split(":")
+  return Dependency().apply {
+    this.groupId = groupId
+    this.artifactId = artifactId
+    this.version = "<SOME_VERSION>"
+  }
+}
 
 /*
  * Miscellaneous

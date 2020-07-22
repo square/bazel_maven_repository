@@ -1,0 +1,24 @@
+{
+  "artifacts": {
+    "com.google.jimfs:jimfs:1.1": {
+      "insecure": true,
+      "deps": ["blah"],
+      "include": ["@maven//blah/foo"]
+    },
+    "com.helpshift:android-helpshift-aar:7.8.0": {
+      "insecure": true,
+      "build_snippet": "# blah blah blah",
+      "include": [
+        ":blah",
+        "//blah/foo",
+        "@maven//blah/foo",
+        "androidx.annotations:annotations"
+      ]
+    }
+  },
+  "jetifier_excludes": [],
+  "maven_rules_repository": "maven_repository_rules",
+  "name": "maven",
+  "target_substitutes": {},
+  "use_jetifier": false
+}

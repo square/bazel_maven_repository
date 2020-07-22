@@ -65,8 +65,8 @@ class GenerateMavenRepoIntegrationTest {
     val args = configFlags("simple", "gen-maven-repo")
     val output = cmd.test(args, baos)
     assertThat(output).contains("Building workspace for 1 artifacts")
-    assertThat(output).contains("Generated 1 build files in ")
-    assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
+    assertThat(output).contains("\nGenerated 1 build files in ")
+    assertThat(output).contains("\nResolved 1 artifacts with 100 threads in")
     val build = mavenRepo.readBuildFile("javax.inject")
     assertThat(build).contains("javax.inject:javax.inject:1")
     assertThat(build).contains("name = \"javax_inject\"")
@@ -81,7 +81,7 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(output).contains("Generated 1 build files in ")
     assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
     assertThat(output)
-        .contains("ERROR: com.squareup.sqldelight:runtime:1.4.0 is not a handled package type, pom")
+        .contains("ERROR: com.squareup.sqldelight:runtime:1.4.0 is not a supported packaging, pom")
   }
 
   @Test fun unknownPackagingWarn() {
@@ -118,7 +118,7 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(build).contains("srcs = [\"@com_squareup_sqldelight_runtime//maven\"],")
   }
 
-  @Test fun excludesSuccess() {
+  @Test fun excludeSuccess() {
     val args = configFlags("excludes-success", "gen-maven-repo")
     val output = cmd.test(args, baos)
     assertThat(output).contains("Building workspace for 1 artifacts")
@@ -126,7 +126,7 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
   }
 
-  @Test fun excludesFailure() {
+  @Test fun excludeFailure() {
     val args = configFlags("excludes-failure", "gen-maven-repo")
     val output = cmd.fail(args, baos)
     assertThat(output).contains("Building workspace for 1 artifacts")
@@ -138,6 +138,53 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(output)
         .contains(""""org.apache.maven:maven-builder-support:3.6.3": {"insecure": True}""")
     assertThat(output).contains(""""exclude": ["org.apache.maven:maven-builder-support"]""")
+  }
+
+  @Test fun includeDeps() {
+    val args = configFlags("include", "gen-maven-repo")
+    val output = cmd.test(args, baos)
+    assertThat(output).contains("Building workspace for 5 artifacts")
+    assertThat(output).contains("Generated 5 build files in ")
+    assertThat(output).contains("Resolved 5 artifacts with 100 threads in")
+
+    val jimfs = mavenRepo.readBuildFile("com.google.jimfs")
+    assertThat(jimfs).contains("\"@maven//blah/foo\",")
+    assertThat(jimfs).contains("\"@maven//javax/inject:javax_inject\",")
+
+    val helpshift = mavenRepo.readBuildFile("com.helpshift")
+    assertThat(helpshift).contains("\":blah\",")
+    assertThat(helpshift).contains("\"@maven//blah/foo\",")
+    assertThat(helpshift).contains("\"//blah/foo\",")
+    assertThat(helpshift).contains("\"@maven//androidx/annotation\",")
+  }
+
+  @Test fun replaceDeps() {
+    val args = configFlags("replace-deps", "gen-maven-repo")
+    val output = cmd.test(args, baos)
+    assertThat(output).contains("Building workspace for 3 artifacts")
+    assertThat(output).contains("Generated 3 build files in ")
+    assertThat(output).contains("Resolved 3 artifacts with 100 threads in")
+
+    val jimfs = mavenRepo.readBuildFile("com.google.jimfs")
+    assertThat(jimfs).contains("\"@maven//androidx/annotation\",")
+
+    val helpshift = mavenRepo.readBuildFile("com.helpshift")
+    assertThat(helpshift).contains("\":blah\",")
+    assertThat(helpshift).contains("\"@maven//blah/foo\",")
+    assertThat(helpshift).contains("\"//blah/foo\",")
+    assertThat(helpshift).contains("\"@maven//androidx/annotation\",")
+  }
+
+  @Test fun overconfiguredArtifacts() {
+    val args = configFlags("overconfigured", "gen-maven-repo")
+    val output = cmd.fail(args, baos)
+
+    assertThat(output)
+        .contains("ERROR: Invalid config: com.google.jimfs:jimfs:1.1 may only be configured " +
+            "with build_snippet, or deps, or include/exclude mechanisms.")
+    assertThat(output)
+        .contains("ERROR: Invalid config: com.helpshift:android-helpshift-aar:7.8.0 " +
+        "may only be configured with build_snippet, or deps, or include/exclude mechanisms.")
   }
 
   @Test fun buildSnippetOverridesUndeclared() {
@@ -193,7 +240,7 @@ class GenerateMavenRepoIntegrationTest {
         .contains("ERROR: Un-declared artifacts referenced in the dependencies of some artifacts.")
 
     // Picasso declares dep on com.android.support:support-annotation. Want to see androidx here.
-    assertThat(output).contains("androidx.annotation:annotation:SOME_VERSION")
+    assertThat(output).contains("androidx.annotation:annotation:<SOME_VERSION>")
   }
 
   @Test fun jetifierPreAndroidXArtifact() {
@@ -323,7 +370,7 @@ class GenerateMavenRepoIntegrationTest {
     return config.artifacts.keys.asSequence()
         .map { spec ->
           val (groupId, art, _) = spec.split(":")
-          return@map groupId to "\"" + art.replace(".","_") + "\""
+          return@map groupId to "\"" + art.replace(".", "_") + "\""
         }
         .fold(mutableMapOf()) { acc, (groupId, lbl) ->
           acc.apply {

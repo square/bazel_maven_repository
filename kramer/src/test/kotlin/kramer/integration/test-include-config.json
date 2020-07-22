@@ -1,0 +1,31 @@
+{
+  "artifacts": {
+    "androidx.annotation:annotation:1.1.0": { "insecure": true },
+    "com.google.guava:guava:18.0": {
+      "insecure": true,
+      "exclude": []
+    },
+    "javax.inject:javax.inject:1": { "insecure": true },
+    "com.google.jimfs:jimfs:1.1": {
+      "insecure": true,
+      "include": [
+        "@maven//blah/foo",
+        "javax.inject:javax.inject"
+      ]
+    },
+    "com.helpshift:android-helpshift-aar:7.8.0": {
+      "insecure": true,
+      "include": [
+        ":blah",
+        "//blah/foo",
+        "@maven//blah/foo",
+        "androidx.annotation:annotation"
+      ]
+    }
+  },
+  "jetifier_excludes": [],
+  "maven_rules_repository": "maven_repository_rules",
+  "name": "maven",
+  "target_substitutes": {},
+  "use_jetifier": false
+}

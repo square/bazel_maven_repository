@@ -59,7 +59,7 @@ maven_repository_specification(
         },
         "com.google.dagger:dagger:2.20": {
             "sha256": "d37a556d8d57e2428c20e222b95346512d11fcf2174d581489a69a1439b886fb",
-            "build_snippet": DAGGER_BUILD_SNIPPET_WITH_PLUGIN.format(version = "2.20"),
+            "build_snippet": DAGGER_BUILD_SNIPPET_WITH_PLUGIN,
         },
         # This is how you specify an artifact that has no hash.  You must either supply a sha256 hash of the jar file
         # or specify that the dep is insecure.
@@ -100,21 +100,55 @@ maven_repository_specification(
         "com.google.auto.value:auto-value-annotations:1.6.3": {"insecure": True},
         "com.google.auto.value:auto-value:1.6.3": {
             "insecure": True,
-            "build_snippet": AUTO_VALUE_BUILD_SNIPPET_WITH_PLUGIN.format(version = "1.6.3"),
+            "build_snippet": AUTO_VALUE_BUILD_SNIPPET_WITH_PLUGIN,
         },
-        "androidx.core:core:1.1.0": {"insecure": True},
+        "com.google.android.material:material:1.0.0": {"insecure": True},
         "androidx.annotation:annotation:1.1.0": {"insecure": True},
+        "androidx.cardview:cardview:1.0.0": {"insecure": True},
+        "androidx.core:core:1.1.0": {"insecure": True},
         "androidx.lifecycle:lifecycle-runtime:2.0.0": {"insecure": True},
+        "androidx.recyclerview:recyclerview:1.1.0": {"insecure": True},
         "androidx.versionedparcelable:versionedparcelable:1.1.0": {"insecure": True},
         "androidx.collection:collection:1.0.0": {"insecure": True},
         "androidx.lifecycle:lifecycle-common:2.0.0": {"insecure": True},
         "androidx.arch.core:core-common:2.0.0": {"insecure": True},
+        "androidx.transition:transition:1.0.0": {"insecure": True},
+        "androidx.fragment:fragment:1.0.0": {"insecure": True},
+        "androidx.legacy:legacy-support-core-utils:1.0.0": {"insecure": True},
+        "androidx.legacy:legacy-support-core-ui:1.0.0": {"insecure": True},
+        "androidx.customview:customview:1.0.0": {"insecure": True},
+        "androidx.appcompat:appcompat:1.0.0": {"insecure": True},
+        "androidx.slidingpanelayout:slidingpanelayout:1.0.0": {"insecure": True},
+        "androidx.drawerlayout:drawerlayout:1.0.0": {"insecure": True},
+        "androidx.vectordrawable:vectordrawable:1.0.0": {"insecure": True},
+        "androidx.print:print:1.0.0": {"insecure": True},
+        "androidx.cursoradapter:cursoradapter:1.0.0": {"insecure": True},
+        "androidx.vectordrawable:vectordrawable-animated:1.0.0": {"insecure": True},
+        "androidx.swiperefreshlayout:swiperefreshlayout:1.0.0": {"insecure": True},
+        "androidx.loader:loader:1.0.0": {"insecure": True},
+        "androidx.viewpager:viewpager:1.0.0": {"insecure": True},
+        "androidx.documentfile:documentfile:1.0.0": {"insecure": True},
+        "androidx.lifecycle:lifecycle-viewmodel:2.0.0": {"insecure": True},
+        "androidx.interpolator:interpolator:1.0.0": {"insecure": True},
+        "androidx.localbroadcastmanager:localbroadcastmanager:1.0.0": {"insecure": True},
+        "androidx.asynclayoutinflater:asynclayoutinflater:1.0.0": {"insecure": True},
+        "androidx.coordinatorlayout:coordinatorlayout:1.0.0": {"insecure": True},
+        "androidx.lifecycle:lifecycle-livedata:2.0.0": {"insecure": True},
+        "androidx.arch.core:core-runtime:2.0.0": {"insecure": True},
+        "androidx.lifecycle:lifecycle-livedata-core:2.0.0": {"insecure": True},
 
-        # TODO(gruber) support includes: [] in order to allow helpshift to work
-        # Helpshift has bad deps, and so cannot do resource processing without the additional
-        # dependencies. It would require a build snippet, which, being an aar snippet, would be
-        # complicated.
-        # "com.helpshift:android-helpshift-aar:7.8.0": {"insecure": True},
+        # Helpshift does not specify its deps, and so cannot do resource merging without the
+        # additional dependencies listed in its "getting started" docs. This could be solved with
+        # a build_snippet, but aar snippets are complicated, so using `deps` or `include` makes it
+        # easier.
+        "com.helpshift:android-helpshift-aar:7.8.0": {
+            "insecure": True,
+            "include": [
+                "androidx.cardview:cardview",
+                "androidx.recyclerview:recyclerview",
+                "com.google.android.material:material",
+            ],
+        },
     },
     # Because these apply to all targets within a group, it's specified separately from the artifact list.
     dependency_target_substitutes = {

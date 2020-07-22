@@ -128,6 +128,12 @@ class GenerateMavenRepo(
   @ExperimentalCoroutinesApi
   override fun run() {
     val repoConfig = parseRepoConfig(configFile)
+    with(repoConfig.validate()) {
+      if (isNotEmpty()) {
+        forEach { kontext.out { "ERROR: Invalid config: ${it.message}" } }
+        throw ProgramResult(1)
+      }
+    }
     val count = AtomicInteger(0)
     val exit = AtomicInteger(0)
     val seen = ConcurrentHashMap<String, IndexEntry>()
@@ -136,7 +142,7 @@ class GenerateMavenRepo(
     val benchmark = measureTimeMillis {
       if (repoConfig.artifacts.isNotEmpty()) Files.createDirectories(workspace)
       runBlocking {
-        kontext.out(false) { "Building workspace for ${repoConfig.artifacts.size} artifacts" }
+        kontext.out { "Building workspace for ${repoConfig.artifacts.size} artifacts" }
         repoConfig.artifacts.entries.asFlow()
             .onEach {
               // TODO: Validate per-artifact configuration (currently validated in starlark).
@@ -161,7 +167,6 @@ class GenerateMavenRepo(
             }
             .count()
             .let { kontext.out { "Generated $it build files in $workspace" } }
-        kontext.out { if (kontext.verbosity > 1) "using $threadCount threads." else "." }
 
         // Check for, and handle, any errors or mis-specifications.
         if (declaredArtifactSlugs.size != repoConfig.artifacts.size) {
@@ -191,6 +196,7 @@ class GenerateMavenRepo(
     kontext.out {
       "Resolved $count artifacts with $threadCount threads in ${benchmark / 1000.0} seconds"
     }
+    kontext.out { if (kontext.verbosity > 1) "using $threadCount threads." else "." }
     exit.get()
         .let { status -> if (status != 0) throw ProgramResult(status) }
   }
@@ -299,7 +305,6 @@ class GenerateMavenRepo(
             "Downloaded ${resolved.main.localFile} $cache in ${time / 1000.0} seconds"
           }
           kontext.verbose { "Extracting package metadatata from ${resolved.main.localFile}" }
-          val androidPackage: String?
           try {
             if (Files.exists(resolved.main.localFile)) {
               val uri = URI.create("jar:" + resolved.main.localFile.toUri())
@@ -387,7 +392,7 @@ private suspend fun <A, B> Flow<Pair<A, B>>.toListMultimapFlow(): Flow<Entry<A, 
 }
 
 private val jvmPackagingTypes = setOf("jar", "aar", "bundle")
-
+private val bazelPackagePrefixes = setOf('@', '/', ':')
 /**
  * For a given resolved artifact, prepare the list of its dependencies, excluding unused scopes,
  * explicitly excluded deps, and fixing and formatting.
@@ -401,59 +406,66 @@ private fun prepareDependencies(
   if (!config.snippet.isNullOrBlank()) return sequenceOf()
   val substitutes =
     repoConfig.targetSubstitutes.getOrElse(resolved.groupId) { mapOf() }
-  return resolved.model.dependencies.asSequence()
-      .filter { dep -> !dep.isOptional }
-      .filter { dep -> dep.slug !in config.exclude }
-      // need a more robust filter, as the dependency type is not guaranteed to be set, but this will do for now.
-      .filter { dep ->
-        when {
-          resolved.model.packaging in jvmPackagingTypes && dep.type in jvmPackagingTypes -> true
-          resolved.model.packaging !in jvmPackagingTypes && dep.type !in jvmPackagingTypes -> true
-          else -> false
+  return when {
+    config.deps.isNotEmpty() -> config.deps.asSequence()
+        .map {
+          if (it[0] in bazelPackagePrefixes) it
+          else unversionedDependency(it).targetFor(repoConfig.name, substitutes, resolved)
         }
-      }
-      .map { dep ->
-        JETIFIER_ARTIFACT_MAPPING[dep.slug]
-            ?.let {
-              val (groupId, artifactId) = it.split(":")
-              Dependency().apply {
-                this.groupId = groupId
-                this.artifactId = artifactId
 
-                // jetifier mapping doesn't specify precise versioning, so we give a fake version.
-                // It's up to the repository maintainer to select the version of androidx they want
-                // in the artifact list.
-                this.version = "SOME_VERSION"
-              }
-            } ?: dep
-      }
-      .onEach { dep ->
-        // Cache for later validation
-        val entry =
-          seen.getOrPut(dep.slug) { GenerateMavenRepo.IndexEntry() }
-        entry.versions.add(dep.version)
-        entry.dependants.add(resolved.coordinate)
-      }
-      .map { dep ->
-        val bazelPackage = "@${repoConfig.name}//${dep.groupPath}"
-        val leafPackage = bazelPackage.split("/")
-            .last()
-        val prefix = "$bazelPackage:"
-        "$prefix${dep.target}"
-            .let { d ->
-              substitutes.getOrElse(d) { d }
-            }
-            .let { d ->
-              when {
-                resolved.groupId == dep.groupId -> d.removePrefix(bazelPackage)
-                leafPackage == dep.target -> bazelPackage
-                else -> d
-              }
-            }
-      }
-      .sorted()
+    else -> resolved.model.dependencies.asSequence()
+        .filter { dep -> !dep.isOptional }
+        .filter { dep -> dep.slug !in config.exclude }
+        // need a more robust filter, as the dependency type is not guaranteed to be set, but this will do for now.
+        .filter { dep ->
+          when {
+            resolved.model.packaging in jvmPackagingTypes && dep.type in jvmPackagingTypes -> true
+            resolved.model.packaging !in jvmPackagingTypes && dep.type !in jvmPackagingTypes -> true
+            else -> false
+          }
+        }
+        .map { dep ->
+          JETIFIER_ARTIFACT_MAPPING[dep.slug]?.let { unversionedDependency(it) } ?: dep
+        }
+        .plus(
+            // add maven extra includes
+            config.include
+                .asSequence()
+                .filter { it[0] !in bazelPackagePrefixes }
+                .map { unversionedDependency(it) }
+        )
+        .onEach { dep ->
+          // Cache for later validation
+          val entry = seen.getOrPut(dep.slug) { GenerateMavenRepo.IndexEntry() }
+          entry.versions.add(dep.version)
+          entry.dependants.add(resolved.coordinate)
+        }
+        .map { dep -> dep.targetFor(repoConfig.name, substitutes, resolved) }
+        .plus(config.include.filter { it[0] in bazelPackagePrefixes }) // add bazel extra includes
+  }
 }
 
+private fun Dependency.targetFor(
+  repoName: String,
+  substitutes: Map<String, String>,
+  resolved: ResolvedArtifact
+): String {
+  val bazelPackage = "@$repoName//$groupPath"
+  val leafPackage = bazelPackage.split("/")
+      .last()
+  val prefix = "$bazelPackage:"
+  return "$prefix$target"
+      .let { d ->
+        substitutes.getOrElse(d) { d }
+      }
+      .let { d ->
+        when {
+          resolved.groupId == groupId -> d.removePrefix(bazelPackage)
+          leafPackage == target -> bazelPackage
+          else -> d
+        }
+      }
+}
 
 internal enum class UnknownPackagingStrategy {
   WARN {
@@ -472,7 +484,7 @@ internal enum class UnknownPackagingStrategy {
       a: FileArtifactResolution
     ) {
       kontext.out {
-        "\nERROR: ${a.resolved.coordinate} is not a handled package type, ${a.resolved.model.packaging}"
+        "\nERROR: ${a.resolved.coordinate} is not a supported packaging, ${a.resolved.model.packaging}"
       }
       exit.set(1)
     }

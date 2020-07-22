@@ -2,9 +2,9 @@ workspace(name = "test_workspace")
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-MAVEN_REPOSITORY_RULES_VERSION = "996a0672205cd11210bf119c62f7a967c454b3d2"
+MAVEN_REPOSITORY_RULES_VERSION = "2.0.0-alpha-3"
 
-MAVEN_REPOSITORY_RULES_CHECKSUM = "bd4d5c15a780f56ceee77efe33519dbdef93ffaa83e5c5a28be3189b5e0723d6"
+MAVEN_REPOSITORY_RULES_CHECKSUM = "853976a2e4908f010568aad8f47b1a1e87e258f33b114e6e92599dc2779938c4"
 
 # Create a bazel workspace to represent the maven universe.
 http_archive(
@@ -53,13 +53,11 @@ kotlin_repositories(compiler_release = {
 kt_register_toolchains()
 
 OKIO_SNIPPET = """
-# Custom snippet for com.squareup.okio:okio:2.4.3
-
 alias(name = "notokio", actual = "okio")
 
 raw_jvm_import(
     name = "okio",
-    jar = "@com_squareup_okio_okio//maven:com/squareup/okio/okio/2.4.3/okio-2.4.3.jar",
+    jar = "@com_squareup_okio_okio//maven",
     deps = [
         "@maven//org/jetbrains/kotlin:kotlin-stdlib",
         "@maven//org/jetbrains/kotlin:kotlin-stdlib-common",

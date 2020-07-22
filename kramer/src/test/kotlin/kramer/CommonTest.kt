@@ -91,4 +91,22 @@ class CommonTest {
     assertThat(model.dependencies.mapNotNull { it.scope }.toSet())
         .isEqualTo(setOf("runtime", "compile"))
   }
+
+  @Test fun zeroOrOneOf() {
+    // two terms
+    assertThat(zeroOrOneOf(true, true)).isEqualTo(false)
+    assertThat(zeroOrOneOf(true, false)).isEqualTo(true)
+    assertThat(zeroOrOneOf(false, true)).isEqualTo(true)
+    assertThat(zeroOrOneOf(false, false)).isEqualTo(true)
+
+    // three terms
+    assertThat(zeroOrOneOf(true, true, true)).isEqualTo(false)
+    assertThat(zeroOrOneOf(true, true, false)).isEqualTo(false)
+    assertThat(zeroOrOneOf(true, false, true)).isEqualTo(false)
+    assertThat(zeroOrOneOf(true, false, false)).isEqualTo(true)
+    assertThat(zeroOrOneOf(false, true, true)).isEqualTo(false)
+    assertThat(zeroOrOneOf(false, true, false)).isEqualTo(true)
+    assertThat(zeroOrOneOf(false, false, true)).isEqualTo(true)
+    assertThat(zeroOrOneOf(false, false, false)).isEqualTo(true)
+  }
 }
