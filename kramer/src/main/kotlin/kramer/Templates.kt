@@ -120,7 +120,7 @@ internal fun mavenFileTemplate(
 filegroup(
     name = "$target",
     srcs = ["$fetchRepo"],
-    visibility = $visibility
+    visibility = $visibility,
     data = [$deps],$testonly
 )
 """
