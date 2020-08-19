@@ -318,9 +318,9 @@ class GenerateMavenRepoIntegrationTest {
         )
         .isEmpty()
 
-    assertThat(output).contains("Building workspace for 467 artifacts")
+    assertThat(output).contains("Building workspace for 463 artifacts")
     assertThat(output).contains("Generated 228 build files in ")
-    assertThat(output).contains("Resolved 467 artifacts with 100 threads in")
+    assertThat(output).contains("Resolved 463 artifacts with 100 threads in")
   }
 
   // This is the flakiest test design that ever flaked, but we want a sense that there is
