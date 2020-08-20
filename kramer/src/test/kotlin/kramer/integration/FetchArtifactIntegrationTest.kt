@@ -17,11 +17,10 @@ package kramer.integration
 import com.github.ajalt.clikt.core.subcommands
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
-import com.squareup.tools.maven.resolution.Repositories.GOOGLE_ANDROID
-import com.squareup.tools.maven.resolution.Repositories.MAVEN_CENTRAL
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import java.nio.file.Files
+import java.nio.file.Paths
 import kramer.FetchArtifactCommand
 import kramer.Kramer
 import org.junit.Test
@@ -33,15 +32,11 @@ import org.junit.Test
  * seconds on average.
  */
 class FetchArtifactIntegrationTest {
+  private val relativeDir = "test_workspace/src/test/kotlin"
+  private val packageDir = this.javaClass.`package`!!.name.replace(".", "/")
   private val tmpDir = Files.createTempDirectory("resolution-test-")
   private val cacheDir = tmpDir.resolve("localcache")
-  val repoArgs = listOf(
-    "--repository=${MAVEN_CENTRAL.id}|${MAVEN_CENTRAL.url}",
-    "--repository=${GOOGLE_ANDROID.id}|${GOOGLE_ANDROID.url}",
-    "--repository=spring_io_plugins|https://repo.spring.io/plugins-release",
-    "--verbose",
-    "--local_maven_cache=$cacheDir"
-  )
+  private val runfiles = Paths.get(System.getenv("JAVA_RUNFILES")!!)
   private val baos = ByteArrayOutputStream()
   private val fetchCommand = FetchArtifactCommand()
   private val cmd = Kramer(output = PrintStream(baos)).subcommands(fetchCommand)
@@ -122,11 +117,22 @@ class FetchArtifactIntegrationTest {
     artifactSpec: String,
     workspace: String = "workspace",
     sha256: String? = null,
-    kramerArgs: List<String> = repoArgs
-  ) =
-    kramerArgs +
-      "fetch-artifact" +
-      "--workspace=$tmpDir/$workspace" +
-      (if (sha256 != null) listOf("--sha256=$sha256") else listOf()) +
-      artifactSpec
+    config: String? = null,
+    settings: String? = null
+  ): List<String> {
+    val testSourceDir = "$runfiles/$relativeDir/$packageDir"
+    val kramerConfig = config ?: "kramer-config.json"
+    val settingsFlag =
+      if (settings != null) listOf("--settings=$testSourceDir/$settings")
+      else listOf()
+    return settingsFlag +
+        "--verbose" +
+        "--verbose" +
+        "--local_maven_cache=$cacheDir" +
+        "--config=$testSourceDir/$kramerConfig" +
+        "fetch-artifact" +
+        "--workspace=$tmpDir/$workspace" +
+        (if (sha256 != null) listOf("--sha256=$sha256") else listOf()) +
+        artifactSpec
+  }
 }

@@ -11,6 +11,7 @@ kt_android_library(
     deps = [
         "//java/foo",
         "@maven//androidx/core",
+        "@maven//com/helpshift:android-helpshift-aar",
     ],
 )
 

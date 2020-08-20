@@ -22,7 +22,7 @@ java_library(
 # com.google.dagger:dagger:{version}
 raw_jvm_import(
     name = "dagger-api",
-    jar = "@com_google_dagger_dagger//maven:com/google/dagger/dagger/{version}/maven-jar-dagger-{version}-classes.jar",
+    jar = "@com_google_dagger_dagger//maven",
     deps = [
        "@maven//javax/inject:javax_inject",
     ],
@@ -54,11 +54,9 @@ java_library(
    visibility = ["//visibility:public"],
 )
 
-# Legacy rule. This should be migrated to raw_jvm_import.
-load("@maven_repository_rules//maven:maven.bzl", "maven_jvm_artifact")
-maven_jvm_artifact(
-   name = "auto-value-processor",
-   artifact = "com.google.auto.value:auto-value:{version}",
+raw_jvm_import(
+    name = "auto-value-processor",
+    jar = "@com_google_auto_value_auto_value//maven",
 )
 
 java_plugin(

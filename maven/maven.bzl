@@ -31,26 +31,35 @@ artifact_config_properties = struct(
     INSECURE = "insecure",
     BUILD_SNIPPET = "build_snippet",
     TESTONLY = "testonly",
+    DEPS = "deps",
+    INCLUDE = "include",
     EXCLUDE = "exclude",
-    values = ["sha256", "insecure", "build_snippet", "testonly", "exclude"],
+    values = ["sha256", "insecure", "build_snippet", "testonly", "deps", "include", "exclude"],
 )
 
 def _generate_maven_repository_impl(ctx):
     workspace_root = ctx.path(".")
     ctx.file("WORKSPACE", "workspace(name = \"{name}\")".format(name = ctx.name))
-    config_json = ctx.path("config.json")
-    ctx.file(config_json, "%s" % ctx.attr.config)
+    verbosity = int(ctx.os.environ.get("BAZEL_MAVEN_VERBOSITY", "0"))
+    threads = ctx.os.environ.get("BAZEL_MAVEN_FETCH_THREADS", "%s" % ctx.attr.fetch_threads)
+    config_json = ctx.path("kramer_config.json")
+    ctx.file(config_json, ctx.attr.config)
+    specification_json = ctx.path("workspace_specification.json")
+    ctx.file(specification_json, ctx.attr.specification)
     args = [
         exec.java_bin(ctx),
         "-jar",
         exec.exec_jar(workspace_root, ctx.attr._kramer_exec),
     ]
-    for repo, url in ctx.attr.repository_urls.items():
-        args.append("--repository=%s|%s" % (repo, url))
+    if verbosity > 1:
+        args.append("--verbose")
+    if verbosity > 0:
+        args.append("--verbose")
+    args.append("--config=%s" % config_json)
     args.append("gen-maven-repo")
-    args.append("--threads=100")
+    args.append("--threads=%s" % threads)
     args.append("--workspace=%s" % workspace_root)
-    args.append("--configuration=%s" % config_json)
+    args.append("--specification=%s" % specification_json)
     ctx.report_progress("Preparing maven repository")
     result = ctx.execute(args, timeout = 600, quiet = False)
     if result.return_code != 0:
@@ -63,8 +72,9 @@ def _generate_maven_repository_impl(ctx):
 _generate_maven_repository = repository_rule(
     implementation = _generate_maven_repository_impl,
     attrs = {
-        "repository_urls": attr.string_dict(mandatory = True),
+        "specification": attr.string(mandatory = True),
         "config": attr.string(mandatory = True),
+        "fetch_threads": attr.int(mandatory = True),  # TODO(gruber) migrate these to cfg/settings
         "maven_rules_repository": attr.string(mandatory = False, default = "maven_repository_rules"),
         "_kramer_exec": attr.label(
             executable = True,
@@ -117,6 +127,12 @@ def _validate_artifacts(artifact_definitions):
     if bool(errors):
         fail("Errors found:\n    %s" % "\n    ".join(errors))
 
+def _repositories(url_dict):
+    repositories = []
+    for (id, url) in url_dict.items():
+        repositories.append(struct(id = id, url = url))
+    return repositories
+
 ####################
 # PUBLIC FUNCTIONS #
 ####################
@@ -132,14 +148,14 @@ def maven_jvm_artifact(artifact, packaging = "jar", visibility = ["//visibility:
     dir = "{group_path}/{artifact_id}/{version}".format(
         group_path = artifact_struct.group_id.replace(".", "/"),
         artifact_id = artifact_struct.artifact_id,
-        version = artifact_struct.version
+        version = artifact_struct.version,
     )
     path = "{dir}/maven-{packaging}-{artifact_id}-{version}-classes.{suffix}".format(
         dir = dir,
         packaging = packaging,
         artifact_id = artifact_struct.artifact_id,
         version = artifact_struct.version,
-        suffix = "jar"
+        suffix = "jar",
     )
     file_target = "@%s//%s:%s" % (artifact_utils.fetch_repo(artifact_struct), "maven", path)
     raw_jvm_import(
@@ -196,7 +212,10 @@ def maven_repository_specification(
         ignore_legacy_android_support_artifacts = False,
 
         # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
-        repository_urls = {"central": "https://repo1.maven.org/maven2"}):
+        repository_urls = {"central": "https://repo1.maven.org/maven2"},
+
+        # Optional number of threads to use while fetching and generating build targets for maven artifacts.
+        fetch_threads = 100):
     # Define repository rule for the jetifier tooling. It may end up unused, but the repo needs to
     # be defined.
     jetifier_init()
@@ -208,6 +227,11 @@ def maven_repository_specification(
 
     _validate_artifacts(artifacts)
 
+    config = struct(
+        name = name,
+        repositories = _repositories(repository_urls),
+    )
+
     for artifact_spec, properties in artifacts.items():
         artifact_struct = artifact_utils.parse_spec(artifact_spec)
         sha256 = properties.get(artifact_config_properties.SHA256, None)
@@ -216,10 +240,10 @@ def maven_repository_specification(
             # Don't use the un-parsed spec, because it may have the type which we shouldn't have.
             artifact = artifact_struct.original_spec,
             sha256 = sha256,
-            repository_urls = repository_urls,
+            config = config.to_json(),
         )
 
-    config = struct(
+    specification = struct(
         name = name,
         target_substitutes = dependency_target_substitutes,
         use_jetifier = use_jetifier,
@@ -231,6 +255,7 @@ def maven_repository_specification(
 
     _generate_maven_repository(
         name = name,
+        specification = specification.to_json(),
         config = config.to_json(),
-        repository_urls = repository_urls,
+        fetch_threads = fetch_threads,
     )

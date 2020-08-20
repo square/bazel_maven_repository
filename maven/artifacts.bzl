@@ -15,7 +15,6 @@
 # Utilities for processing maven artifact coordinates.
 #
 
-
 # Builds a struct containing the basic coordinate elements of a maven artifact spec.
 def _parse_spec(artifact_spec):
     parts = artifact_spec.split(":")

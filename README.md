@@ -22,10 +22,11 @@ Prerelease: `2.0.0-alpha`
   * [Coordinate Translation](#coordinate-translation)
   * [Artifact Configuration](#artifact-configuration)
     + [Sha verification](#sha-verification)
-    + [Substitution of build targets](#substitution-of-build-targets)
     + [Testonly](#testonly)
-    + [Excludes](#excludes)
-    + [Packaging](#packaging)
+    + [Exclude](#exclude)
+    + [Include](#include)
+    + [Deps](#deps)
+    + [Substitution of build targets](#substitution-of-build-targets)
   * [Caching](#caching)
 - [Limitations](#limitations)
   * [Other Usage Notes](#other-usage-notes)
@@ -73,9 +74,9 @@ a repository.
 
 ## Supported Types
 
-Currently `.aar` and `.jar` artifacts are supported.  OSGI bundles are supported by assuming they are
-normal `.jar` artifacts (which they are, just have a packaging property of `bundle` and some extra
-metadata in `META-INF` of the `.jar` file).
+Currently `.aar` and `.jar` artifacts are supported.  OSGI bundles are supported by assuming they
+are normal `.jar` artifacts (which they are, just have a packaging property of `bundle` and some
+extra metadata in `META-INF` of the `.jar` file).
 
 `.aar` artifacts should be specified as `"some.group:some-artifact:1.0:aar"` (just append `:aar`
 onto the artifact spec string). 
@@ -87,8 +88,9 @@ graph, it should be possible to support it.
 ## Inter-artifact dependencies
 
 This rule will, in the generated repository, infer inter-artifact dependencies from pom.xml files
-of those artifacts (pulling in only `compile` and `runtime` dependencies, and avoiding any `systemPath`
-dependencies).  This avoids the bazel user having to over-specify the full set of dependency jars.
+of those artifacts (pulling in only `compile` and `runtime` dependencies, and avoiding any 
+`systemPath` dependencies).  This avoids the bazel user having to over-specify the full set of
+dependency jars.
 
 All artifacts, even if only transitively depended, must be specified with a pinned version in the
 `artifacts` dictionary. Any artifacts discovered in the inferred dependency search, which are not
@@ -123,13 +125,156 @@ The rules will reject artifacts without SHAs are not marked as "insecure".
 > in configuration matches the checksum of the file downloaded.  It is the responsibility of the
 > maintainer to use proper security practices and obtain the expected checksum from a trusted source.
 
+### Testonly
+
+An artifact can be declared testonly - this forces the `testonly = True` flag for the generated target
+to be set, requiring that this artifact only be used by other testonly rules (e.g. test-libraries with
+`testonly = true` also set, or `*_test` rules.)
+
+```python
+maven_repository_specification(
+    name = "maven",
+    artifacts = {
+        "com.google.truth:truth:1.0": {"insecure": True, "testonly": True},
+        # ... all the other deps.
+    },
+)
+```
+
+### Exclude
+
+An artifact can have some (or all) of its direct dependencies pruned by use of the `exclude` property.
+For instance:
+
+```python
+maven_repository_specification(
+    name = "maven",
+    artifacts = {
+        "com.google.truth:truth:1.0": {
+            "insecure": True,
+            "exclude": ["com.google.auto.value:auto-value-annotations"],
+        },
+        # ... all the other deps.
+    },
+)
+```
+
+This results in truth omitting a dependency on the auto-value annotations - useful to avoid
+dependencies not specified as `<optional>true</optional>` in the pom.xml, but which are not necessary
+for correct operation of the artifact.  A good example of this would be robolectric, which contains
+dependencies on a lot of maven download code which is not needed in a bazel build.
+
+> Note: This feature is incompatible with `"deps": [...]` and `"build_snippets": "..."` mechanisms.
+
+### Include
+
+An artifact can have additional dependencies added using the `include` property. For instance:
+
+```python
+maven_repository_specification(
+    name = "maven",
+    artifacts = {
+        "com.helpshift:android-helpshift-aar:7.8.0": {
+            "insecure": True,
+            "include": [
+                # Bazel dependencies 
+                "@//some/local/dependency", # in the root workspace of this build
+                "@some_workspace//some/other/dep", # in some external workspace of this build
+
+                # While theoretically in the root workspace, because this occurs inside the maven
+                # workspace maven may interpret this as being inside the @maven workspace. Use
+                # the @// prefix to force it into the root workspace
+                "//some/local/dependency",
+
+                # Useful for referencing some custom thing added by a snippet on another artifact.
+                ":some_target_in_the_same_package",
+
+                # Maven artifact coordinates, which will be interpreted relative to the presently
+                # configured maven workspace. These will also result in errors if their versioned
+                # artifacts have not been pinned in the artifact dictionary.
+                "androidx.cardview:cardview",
+                "androidx.recyclerview:recyclerview",
+                "com.google.android.material:material",
+            ]
+        },
+        # ... all the other deps.
+    },
+)
+```
+
+This results in the bazel workspace generating additional dependencies, converting maven-style
+`some.group.id:artifactId` pairs to `@maven//some/group/id:artifactId` and passing bazel-style
+dependencies (`:foo`, `//foo/bar`, `@someWorkspace//foo/bar:baz`) through as text, relying on
+bazel itself to resolve and complain if they are incorrect.
+
+These additions are performed after automatically detected dependencies are processed (and
+after excludes are processed).  It can be used to add missing deps from badly specified pom
+files, or it can add-back-in optional dependencies (which are not included by default).
+
+> Note: This feature is incompatible with `"deps": [...]` and `"build_snippets": "..."` mechanisms.
+
+### Deps
+
+An artifact can have its dependencies entirely specified (overriding the automated detection
+via maven resolution) using the `deps` property. For instance:
+
+```python
+maven_repository_specification(
+    name = "maven",
+    artifacts = {
+        "com.helpshift:android-helpshift-aar:7.8.0": {
+            "insecure": True,
+            "deps": [
+                # Bazel dependencies 
+                "@//some/local/dependency", # in the root workspace of this build
+                "@some_workspace//some/other/dep", # in some external workspace of this build
+
+                # While theoretically in the root workspace, because this occurs inside the maven
+                # workspace maven may interpret this as being inside the @maven workspace. Use
+                # the @// prefix to force it into the root workspace
+                "//some/local/dependency",
+
+                # Useful for referencing some custom thing added by a snippet on another artifact.
+                ":some_target_in_the_same_package",
+
+                # Maven artifact coordinates, which will be interpreted relative to the presently
+                # configured maven workspace. These will also result in errors if their versioned
+                # artifacts have not been pinned in the artifact dictionary.
+                "androidx.cardview:cardview",
+                "androidx.recyclerview:recyclerview",
+                "com.google.android.material:material",
+            ]
+        },
+        # ... all the other deps.
+    },
+)
+```
+
+This results in the bazel workspace ignoring the dependencies from resolved metadata, and using
+the supplied list instead. It converts maven-style `some.group.id:artifactId` pairs to
+`@maven//some/group/id:artifactId`.  It passes bazel-style dependencies (`:foo`, `//foo/bar`, 
+`@someWorkspace//foo/bar:baz`) through as text, relying on bazel itself to resolve and complain
+if they are incorrect.
+
+> Note: This feature is incompatible with `"include": [...]` `"exclude": [...]` and
+> `"build_snippets": "..."` mechanisms, as it entirely takes responsibility for the deps
+> list.
+
 ### Substitution of build targets
 
-One can provide a `BUILD.bazel` target snippet that will be substituted for the auto-generated target
-implied by a maven artifact.  This is very useful for providing an annotation-processor-exporting
-alternative target.  The substitution is naive, so the string needs to be appropriate and any rules
-need to be correct, contain the right dependencies, etc.  To aid that it's also possible to (on a
-per-package basis) substitute dependencies on a given fully-qualified bazel target for another. 
+> Note: Because this feature entirely takes over snippet generation, it is more brittle than other
+> features that may address the relevant use-cases. Please prefer those features over this one,
+> if they can solve your problem, as it overrides a lot of validation and guarantees, and a given
+> snippet may become stale with version changes of the artifacts specified.
+>
+> It is useful, however, if you cannot address your case with other features.
+
+One can provide a `BUILD.bazel` target snippet that will be substituted for the auto-generated
+target implied by a maven artifact.  This is very useful for providing an
+annotation-processor-exporting alternative target.  The substitution is naive, so the string needs
+to be appropriate and any rules need to be correct, contain the right dependencies, etc.  To aid
+that it's also possible to (on a per-package basis) substitute dependencies on a given
+fully-qualified bazel target for another. 
 
 A simple use-case would be to substitute a target name (e.g. "mockito-core" -> "mockito") for
 cleaner/easier use in bazel:
@@ -160,8 +305,9 @@ java_test(
 )
 ```
 
-More complex use-cases are possible, such as adding substitute targets with annotation processing `java_plugin`
-targets and exports.  An example with Dagger would look like this (with the basic rule imports assumed):
+More complex use-cases are possible, such as adding substitute targets with annotation processing
+`java_plugin` targets and exports.  An example with Dagger would look like this (with the basic rule
+imports assumed):
 
 ```python
 DAGGER_PROCESSOR_SNIPPET = """
@@ -169,7 +315,10 @@ DAGGER_PROCESSOR_SNIPPET = """
 java_library(name = "dagger", exports = [":dagger_api"], exported_plugins = [":dagger_plugin"])
 
 # alternatively-named import of the raw dagger library.
-maven_jvm_artifact(name = "dagger_api", artifact = "com.google.dagger:dagger:2.20")
+raw_jvm_import(
+    name = "dagger_api",
+    jars = "@com_google_dagger_dagger//maven")    
+)
 
 java_plugin(
     name = "dagger_plugin",
@@ -180,10 +329,13 @@ java_plugin(
 """
 ```
 
-The above is given as a substitution in the `maven_repository_specification()` rule.  However, since the inferred
-dependencies of `:dagger-compiler` would create a dependency cycle because it includes `:dagger` as a dep, the
-specification rule also should include a `dependency_target_substitution`, to ensures that the inferred rules in
-the generated `com/google/dagger/BUILD` file consume `:dagger_api` instead of the wrapper replacement target.
+The above is given as a substitution in the `maven_repository_specification()` rule.  However,
+since the inferred dependencies of `:dagger-compiler` would create a dependency cycle because it
+includes `:dagger` as a dep, the specification rule also should include a
+`dependency_target_substitution`, to ensures that the inferred rules in the generated
+`com/google/dagger/BUILD` file consume `:dagger_api` instead of the wrapper replacement target, or
+use `include` and `exclude` statements on the `com.google.dagger:dagger-compiler` artifact to have
+it depend on the now-renamed target (see the test/test_workspace for an example of this)
 
 ```python
 maven_repository_specification(
@@ -205,62 +357,19 @@ maven_repository_specification(
 )
 ```
 
-Thereafter, any target with a dependency on (in this example) `@maven//com/google/dagger` will invoke annotation
-processing and generate any dagger-generated code.  The same pattern could be used for
-[Dagger](http://github.com/google/dagger), [AutoFactory and AutoValue](http://github.com/google/auto), etc.
+Thereafter, any target with a dependency on (in this example) `@maven//com/google/dagger` will
+invoke annotation processing and generate any dagger-generated code. A similar pattern could be
+used for [AutoFactory and AutoValue](http://github.com/google/auto), configuring kotlinc 
+plugins, etc.
 
-Such snippet constants can be extracted into .bzl files and imported to keep the WORKSPACE file tidy. In the
-future some standard templates may be offered by this project, but not until deps validation is available, as
-it would be too easy to have templates' deps lists go out of date as versions bumped, if no other validation
-prevented it or notified about it.
+Such snippet constants can be extracted into .bzl files and imported to keep the WORKSPACE file
+tidy. In the future some standard templates may be offered by this project, but not until deps
+validation is available, as it would be too easy to have templates' deps lists go out of date as
+versions bumped, if no other validation prevented it or notified about it.
 
-### Testonly
-
-An artifact can be declared testonly - this forces the `testonly = True` flag for the generated target
-to be set, requiring that this artifact only be used by other testonly rules (e.g. test-libraries with
-`testonly = true` also set, or `*_test` rules.)
-
-```python
-maven_repository_specification(
-    name = "maven",
-    artifacts = {
-        "com.google.truth:truth:1.0": {"insecure": True, "testonly": True},
-        # ... all the other deps.
-    },
-)
-```
-
-### Excludes
-
-An artifact can have some (or all) of its direct dependencies pruned by use of the `exclude` property.
-For instance:
-
-```python
-maven_repository_specification(
-    name = "maven",
-    artifacts = {
-        "com.google.truth:truth:1.0": {
-            "insecure": True,
-            "exclude": ["com.google.auto.value:auto-value-annotations"],
-        },
-        # ... all the other deps.
-    },
-)
-```
-
-This results in truth omitting a dependency on the auto-value annotations - useful to avoid
-dependencies not specified as `<optional>true</optional>` in the pom.xml, but which are not necessary
-for correct operation of the artifact.  A good example of this would be robolectric, which contains
-dependencies on a lot of maven download code which is not needed in a bazel build.
-
-### Packaging
-
-Optionally, an artifact may specify a packaging. Valid artifact coordinates are listable this way:
-`"groupId:artifactId:version[:packaging]"`
-
-At present, only `jar` (default) and `aar` packaging are supported.
-
-> Note: As of 2.0.0 this will no longer be necessary, as packaging is obtained from the metadata.
+> Note: This feature is incompatible with `"include": [...]` `"exclude": [...]` and
+> `"deps": "..."` mechanisms, as it entirely takes responsibility for the targets written
+> into the build file, and therefore, any dependencies.  It also overrides a lot of warnings.
 
 ## Caching
 

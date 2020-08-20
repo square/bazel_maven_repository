@@ -18,6 +18,9 @@ import com.google.common.collect.ImmutableListMultimap
 import com.squareup.tools.maven.resolution.Artifact
 import java.security.MessageDigest
 import org.apache.maven.model.Dependency
+import org.apache.maven.model.Model
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
 
 /*
  * Constants
@@ -46,6 +49,16 @@ fun ByteArray.sha256(): String {
   return digest.fold("", { str, it -> str + "%02x".format(it) })
 }
 
+fun Throwable.formatStackTrace(): String {
+  val baos = ByteArrayOutputStream()
+  printStackTrace(PrintStream(baos))
+  return baos.toString()
+}
+
+fun zeroOrOneOf(vararg conditions: Boolean): Boolean {
+  return conditions.map { if (it) 1 else 0 }.reduce { acc, i -> acc + i } <= 1
+}
+
 /*
  *  Utilities to extract bazel paths/packages/targets from maven artifacts and dependencies.
  */
@@ -67,7 +80,33 @@ val Dependency.groupPath: String get() = groupPath(groupId)
 internal fun groupPath(string: String) = string.replace(".", "/")
 internal fun target(string: String) = string.replace(".", "_")
 
+/**
+ * Create a dependency from a `groupId:artifactId` pair, with a fake version.
+ * Used when rewriting dependencies in contexts where we don't have a version,
+ * such as "include" or jetifier deps surgery.
+ *
+ * This function can take a more narrowly specified artifact, but will ignore
+ * anything past groupId/artifactId
+ */
+internal fun unversionedDependency(it: String): Dependency {
+  val (groupId, artifactId) = it.split(":")
+  return Dependency().apply {
+    this.groupId = groupId
+    this.artifactId = artifactId
+    this.version = "<SOME_VERSION>"
+  }
+}
+
 /*
  * Miscellaneous
  */
 val Dependency.slug: String get() = "$groupId:$artifactId"
+
+/** Filters out any deps not to be propagated to runtime consumers */
+fun filterBuildDeps(model: Model) {
+  model.apply {
+    dependencies = dependencies.filter { dep ->
+      dep.scope.isNullOrBlank() || dep.scope in acceptedScopes
+    }
+  }
+}

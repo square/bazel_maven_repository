@@ -17,6 +17,7 @@ package kramer
 import com.google.common.truth.Truth.assertThat
 import com.squareup.tools.maven.resolution.ArtifactResolver
 import org.apache.maven.model.Dependency
+import org.apache.maven.model.Model
 import org.junit.Test
 
 class CommonTest {
@@ -45,5 +46,74 @@ class CommonTest {
 
   @Test fun fetchRepoPackage() {
     assertThat(artifact.fetchRepoPackage()).isEqualTo("@a_b_c_d_e_f_g//maven")
+  }
+
+  @Test fun testFormatException() {
+    val error = Exception("test_msg")
+    assertThat(error.formatStackTrace()).contains("java.lang.Exception: test_msg")
+    assertThat(error.formatStackTrace())
+        .contains("at kramer.CommonTest.testFormatException(CommonTest.kt")
+  }
+
+  @Test fun filterOutNonBuildDeps() {
+    val model = Model().apply {
+      groupId = "blah.foo"
+      artifactId = "blargh"
+      version = "1.0"
+      dependencies = listOf(
+          Dependency().apply {
+            groupId = "blah.foo"
+            artifactId = "blargh-runtime"
+            version = "1.0"
+            scope = "runtime"
+          },
+          Dependency().apply {
+            groupId = "blah.foo"
+            artifactId = "blargh-compile"
+            version = "1.0"
+            scope = "compile"
+          },
+          Dependency().apply {
+            groupId = "blah.foo"
+            artifactId = "blargh-system"
+            version = "1.0"
+            scope = "system"
+          },
+          Dependency().apply {
+            groupId = "blah.foo"
+            artifactId = "blargh-provided"
+            version = "1.0"
+            scope = "provided"
+          },
+          Dependency().apply {
+            groupId = "blah.foo"
+            artifactId = "blargh-default"
+            version = "1.0"
+          }
+      )
+    }
+    assertThat(model.dependencies).hasSize(5)
+    filterBuildDeps(model)
+    assertThat(model.dependencies).hasSize(3)
+    assertThat(model.dependencies.mapNotNull { it.scope }.toSet())
+        .isEqualTo(setOf("runtime", "compile"))
+  }
+
+  @Test fun zeroOrOneOf() {
+    // two terms
+    assertThat(zeroOrOneOf(true, true)).isEqualTo(false)
+    assertThat(zeroOrOneOf(true, false)).isEqualTo(true)
+    assertThat(zeroOrOneOf(false, true)).isEqualTo(true)
+    assertThat(zeroOrOneOf(false, false)).isEqualTo(true)
+
+    // three terms
+    assertThat(zeroOrOneOf(true, true, true)).isEqualTo(false)
+    assertThat(zeroOrOneOf(true, true, false)).isEqualTo(false)
+    assertThat(zeroOrOneOf(true, false, true)).isEqualTo(false)
+    assertThat(zeroOrOneOf(true, false, false)).isEqualTo(true)
+    assertThat(zeroOrOneOf(false, true, true)).isEqualTo(false)
+    assertThat(zeroOrOneOf(false, true, false)).isEqualTo(true)
+    assertThat(zeroOrOneOf(false, false, true)).isEqualTo(true)
+    assertThat(zeroOrOneOf(false, false, false)).isEqualTo(true)
   }
 }
