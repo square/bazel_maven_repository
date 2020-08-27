@@ -327,7 +327,7 @@ java_library(name = "dagger", exports = [":dagger_api"], exported_plugins = [":d
 # alternatively-named import of the raw dagger library.
 raw_jvm_import(
     name = "dagger_api",
-    jars = "@com_google_dagger_dagger//maven")    
+    jars = "@com_google_dagger_dagger//maven",    
 )
 
 java_plugin(
