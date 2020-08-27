@@ -4,15 +4,15 @@ A bazel ruleset creating an idiomatic bazel representation of a maven repository
 pinned list of artifacts.
 
 Release: `1.2.0` <br/>
-Prerelease: `2.0.0-alpha`
+Prerelease: `2.0.0-alpha-4`
 
 | Version | Sha |
 | ------- | --- |
 | [Release 1.2.0] | `9e23155895d2bfc60b35d2dfd88c91701892a7efba5afacdf00cebc0982229fe` |
-| [Prerelease 2.0.0-alpha] | `457a5a1121d2920b28dd711fdf1ef12a71574065c0561f5c7569721c77b7a698` |
+| [Prerelease 2.0.0-alpha-4] | `a6484fec8d1aebd4affff7ae1ee9b59141858b2c636222bdb619526ccd8b3358` |
 
 [Release 1.2.0]: https://github.com/square/bazel_maven_repository/archive/1.2.0.zip
-[Prerelease 2.0.0-alpha]: https://github.com/square/bazel_maven_repository/archive/2.0.0-alpha.zip
+[Prerelease 2.0.0-alpha-4]: https://github.com/square/bazel_maven_repository/archive/2.0.0-alpha-4.zip
 
 **[Table of Contents](http://tableofcontent.eu)**
 
@@ -101,7 +101,11 @@ error output should suggest configuration to either pin them or exclude them.
 
 Translation from maven group/artifact coordinates to bazel package/target coordinates is naive but
 orderly.  The logic mirrors the layout of a maven repository, with groupId elements (separated by
-`.`) turning into a package hierarchy, and the artifactId turning into a bazel target. 
+`.`) turning into a package hierarchy, and the artifactId turning into a bazel target.
+
+For example: `com.google.dagger:dagger-compiler:2.16` turns into `@maven//com/google/dagger:dagger`,
+and `javax.inject:javax.inject:1` becomes `@maven//javax/inject:javax_inject` (since `.` is not a
+valid character for a target). 
 
 ## Artifact Configuration
 ### Sha verification
@@ -143,6 +147,8 @@ maven_repository_specification(
 
 ### Exclude
 
+> Since 2.0.0
+
 An artifact can have some (or all) of its direct dependencies pruned by use of the `exclude` property.
 For instance:
 
@@ -167,6 +173,8 @@ dependencies on a lot of maven download code which is not needed in a bazel buil
 > Note: This feature is incompatible with `"deps": [...]` and `"build_snippets": "..."` mechanisms.
 
 ### Include
+
+> Since 2.0.0
 
 An artifact can have additional dependencies added using the `include` property. For instance:
 
@@ -214,6 +222,8 @@ files, or it can add-back-in optional dependencies (which are not included by de
 > Note: This feature is incompatible with `"deps": [...]` and `"build_snippets": "..."` mechanisms.
 
 ### Deps
+
+> Since 2.0.0
 
 An artifact can have its dependencies entirely specified (overriding the automated detection
 via maven resolution) using the `deps` property. For instance:
@@ -403,8 +413,8 @@ exactly as maven would.
 
 ### Caches
 
-Because of the nature of bazel repository/workspace operation, updating the list of artifacts may
-invalidate build caches, and force a re-run of workspace operations (and possibly reduce
+Because of the nature of bazel repository/workspace operation, updating the list of artifacts
+invalidates the analysis cache, and force a re-run of workspace operations (and possibly reduce
 incrementality of the next build).  As of 2.0, the workspace generation is drastically faster.
 
 ### Clogged WORKSPACE files
