@@ -27,13 +27,8 @@ jobs:
           "/home/runner/.cache/bazel"
           "/home/runner/.m2/repository"
         key: caches-${{ runner.os }}
-    - name: Install bazelisk
-      run: |
-        curl -LO "https://github.com/bazelbuild/bazelisk/releases/download/v1.4.0/bazelisk-darwin-amd64"
-        mkdir -p "${GITHUB_WORKSPACE}/bin/"
-        mv bazelisk-darwin-amd64 "${GITHUB_WORKSPACE}/bin/bazel"
-        chmod a+x "${GITHUB_WORKSPACE}/bin/bazel"
-        echo "::set-env name=BAZELISK_GITHUB_TOKEN::${{ secrets.GITHUB_TOKEN }}"
+    - name: Setup bazelisk for Bazel builds
+      uses: holvonix-open/setup-bazelisk@v0.6.1
     - name: Test All
       run: |
         "${GITHUB_WORKSPACE}/bin/bazel" test //...
