@@ -9,10 +9,10 @@ Prerelease: `2.0.0-alpha-4`
 | Version | Sha |
 | ------- | --- |
 | [Release 1.2.0] | `9e23155895d2bfc60b35d2dfd88c91701892a7efba5afacdf00cebc0982229fe` |
-| [Prerelease 2.0.0-alpha-4] | `a6484fec8d1aebd4affff7ae1ee9b59141858b2c636222bdb619526ccd8b3358` |
+| [Prerelease 2.0.0-alpha-5] | `fde80cafa02a2c034cc8086c158f500e7b6ceb16d251273a6cc82f1c0723e0e8` |
 
 [Release 1.2.0]: https://github.com/square/bazel_maven_repository/archive/1.2.0.zip
-[Prerelease 2.0.0-alpha-4]: https://github.com/square/bazel_maven_repository/archive/2.0.0-alpha-4.zip
+[Prerelease 2.0.0-alpha-5]: https://github.com/square/bazel_maven_repository/archive/2.0.0-alpha-5.zip
 
 **[Table of Contents](http://tableofcontent.eu)**
 
