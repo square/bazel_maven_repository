@@ -4,7 +4,7 @@ A bazel ruleset creating an idiomatic bazel representation of a maven repository
 pinned list of artifacts.
 
 Release: `1.2.0` <br/>
-Prerelease: `2.0.0-alpha-4`
+Prerelease: `2.0.0-alpha-5`
 
 | Version | Sha |
 | ------- | --- |
