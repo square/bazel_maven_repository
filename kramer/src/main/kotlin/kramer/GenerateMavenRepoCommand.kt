@@ -32,6 +32,17 @@ import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.SUC
 import com.squareup.tools.maven.resolution.Repositories.Companion.DEFAULT
 import com.squareup.tools.maven.resolution.ResolutionResult
 import com.squareup.tools.maven.resolution.ResolvedArtifact
+import java.io.IOException
+import java.net.URI
+import java.nio.file.FileSystem
+import java.nio.file.FileSystems
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.collections.Map.Entry
+import kotlin.system.measureTimeMillis
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -49,17 +60,6 @@ import kramer.GenerateMavenRepo.ArtifactResolution.AarArtifactResolution
 import kramer.GenerateMavenRepo.ArtifactResolution.FileArtifactResolution
 import kramer.GenerateMavenRepo.ArtifactResolution.JarArtifactResolution
 import org.apache.maven.model.Dependency
-import java.io.IOException
-import java.net.URI
-import java.nio.file.FileSystem
-import java.nio.file.FileSystems
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.Collections
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
-import kotlin.collections.Map.Entry
-import kotlin.system.measureTimeMillis
 
 class GenerateMavenRepo(
   fs: FileSystem = FileSystems.getDefault()
@@ -410,15 +410,16 @@ private val jvmPackagingTypes = setOf("jar", "aar", "bundle")
 private val bazelPackagePrefixes = setOf('@', '/', ':')
 /**
  * For a given resolved artifact, prepare the list of its dependencies, excluding unused scopes,
- * explicitly excluded deps, and fixing and formatting.
+ * explicitly excluded deps, and fixing and formatting.  Returns an ordered set, to handle cases
+ * where a dependency is included in multiple scopes, or multiple times in the .pom file.
  */
 private fun prepareDependencies(
   resolved: ResolvedArtifact,
   config: ArtifactConfig,
   seen: ConcurrentHashMap<String, GenerateMavenRepo.IndexEntry>,
   repoConfig: RepositorySpecification
-): Sequence<String> {
-  if (!config.snippet.isNullOrBlank()) return sequenceOf()
+): Set<String> {
+  if (!config.snippet.isNullOrBlank()) return setOf()
   val substitutes =
     repoConfig.targetSubstitutes.getOrElse(resolved.groupId) { mapOf() }
   return when {
@@ -427,6 +428,7 @@ private fun prepareDependencies(
           if (it[0] in bazelPackagePrefixes) it
           else unversionedDependency(it).targetFor(repoConfig.name, substitutes, resolved)
         }
+        .toSet()
 
     else -> resolved.model.dependencies.asSequence()
         .filter { dep -> !dep.isOptional }
@@ -457,6 +459,7 @@ private fun prepareDependencies(
         }
         .map { dep -> dep.targetFor(repoConfig.name, substitutes, resolved) }
         .plus(config.include.filter { it[0] in bazelPackagePrefixes }) // add bazel extra includes
+        .toSet()
   }
 }
 
@@ -489,7 +492,8 @@ internal enum class UnknownPackagingStrategy {
       exit: AtomicInteger,
       a: FileArtifactResolution
     ) = kontext.out {
-      "WARNING: ${a.resolved.coordinate} is not a handled package type, ${a.resolved.model.packaging}"
+      "WARNING: ${a.resolved.coordinate} is not a handled package type, " +
+        "${a.resolved.model.packaging}"
     }
   },
   FAIL {
@@ -499,7 +503,8 @@ internal enum class UnknownPackagingStrategy {
       a: FileArtifactResolution
     ) {
       kontext.out {
-        "\nERROR: ${a.resolved.coordinate} is not a supported packaging, ${a.resolved.model.packaging}"
+        "\nERROR: ${a.resolved.coordinate} is not a supported packaging, " +
+          "${a.resolved.model.packaging}"
       }
       exit.set(1)
     }
