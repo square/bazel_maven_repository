@@ -19,7 +19,9 @@ import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
+import java.nio.file.FileSystems
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 import kramer.GenerateMavenRepo
 import kramer.Kontext
@@ -30,8 +32,6 @@ import kramer.parseJson
 import org.junit.After
 import org.junit.Ignore
 import org.junit.Test
-import java.nio.file.FileSystems
-import java.nio.file.Path
 
 /**
  * Integration tests for [GenerateMavenRepoCommand]. These are dependent on access to the network
@@ -88,7 +88,9 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(output).contains("Generated 1 build files in ")
     assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
     assertThat(output)
-        .contains("WARNING: com.squareup.sqldelight:runtime:1.4.0 is not a handled package type, pom")
+      .contains("WARNING: com.squareup.sqldelight:runtime:1.4.0 is not a handled package type")
+    assertThat(output)
+      .contains("com.squareup.sqldelight:runtime:1.4.0 is not a handled package type, pom")
     val build = mavenRepo.readBuildFile("com.squareup.sqldelight")
     assertThat(build).contains("com.squareup.sqldelight:runtime:1.4.0")
     assertThat(build).contains("filegroup(")
@@ -167,6 +169,18 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(helpshift).contains("\"@maven//blah/foo\",")
     assertThat(helpshift).contains("\"//blah/foo\",")
     assertThat(helpshift).contains("\"@maven//androidx/annotation\",")
+  }
+
+  @Test fun duplicateDeps() {
+    val args = configFlags("duplicate-deps", "gen-maven-repo")
+    val output = cmd.test(args, baos)
+    assertThat(output).contains("Building workspace for 9 artifacts")
+    assertThat(output).contains("Generated 2 build files in ")
+    assertThat(output).contains("Resolved 9 artifacts with 100 threads in")
+
+    val jimfs = mavenRepo.readBuildFile("com.github.jnr")
+    assertThat(jimfs).contains("\":jffi\",")
+    assertThat(jimfs).doesNotContainMatch("\":jffi\",\n        \":jffi\",")
   }
 
   @Test fun overconfiguredArtifacts() {
