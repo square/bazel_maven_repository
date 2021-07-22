@@ -19,11 +19,11 @@ import com.squareup.moshi.Json
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import org.apache.maven.model.Repository
+import org.apache.maven.model.RepositoryPolicy
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.reflect.KClass
-import org.apache.maven.model.Repository
-import org.apache.maven.model.RepositoryPolicy
 
 /**
  * Supplies a set of known overrides which can affect the behavior of the fetch engine.
@@ -109,24 +109,26 @@ data class ArtifactConfig(
   fun validate(artifact: String): List<ValidationError> {
     val errors = mutableListOf<ValidationError>()
     if (insecure xor (sha256 == null)) errors.add(
-        ValidationError(artifact, "$artifact must be marked either with a sha256 or as insecure.")
+      ValidationError(artifact, "$artifact must be marked either with a sha256 or as insecure.")
     )
     if (testonly && (snippet != null)) errors.add(
-        ValidationError(
-            artifact,
-            "Do not set testonly on $artifact. " +
-                "It has a build_snippet and target generation is overridden"
-        )
+      ValidationError(
+        artifact,
+        "Do not set testonly on $artifact. " +
+          "It has a build_snippet and target generation is overridden"
+      )
     )
     if (!zeroOrOneOf(
-            snippet != null,
-            deps.isNotEmpty(),
-            include.isNotEmpty() || exclude.isNotEmpty())) {
+        snippet != null,
+        deps.isNotEmpty(),
+        include.isNotEmpty() || exclude.isNotEmpty()
+      )
+    ) {
       errors.add(
         ValidationError(
-            artifact,
-            "$artifact may only be configured with build_snippet, or deps, or include/exclude" +
-                " mechanisms. These are incompatible settings"
+          artifact,
+          "$artifact may only be configured with build_snippet, or deps, or include/exclude" +
+            " mechanisms. These are incompatible settings"
         )
       )
     }
@@ -151,6 +153,8 @@ data class RepositorySpecification(
   val jetifierExcludes: List<String>,
   @Json(name = "maven_rules_repository")
   val rulesLabel: String,
+  @Json(name = "generate_rules_jvm_compatability_targets")
+  val generateRulesJvmCompatabilityTargets: Boolean,
   @Json(name = "ignore_legacy_android_support_artifacts")
   val ignoreLegacyAndroidSupportArtifacts: Boolean = false
 ) {
@@ -160,7 +164,7 @@ data class RepositorySpecification(
 
   fun validate(): List<ValidationError> {
     return artifacts.entries
-        .flatMap { (artifact, config) -> config.validate(artifact) }
+      .flatMap { (artifact, config) -> config.validate(artifact) }
   }
 }
 

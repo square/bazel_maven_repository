@@ -21,5 +21,6 @@
   "maven_rules_repository": "maven_repository_rules",
   "name": "maven",
   "target_substitutes": {},
-  "use_jetifier": false
+  "use_jetifier": false,
+  "generate_rules_jvm_compatability_targets": false
 }

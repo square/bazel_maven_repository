@@ -32,17 +32,6 @@ import com.squareup.tools.maven.resolution.FetchStatus.RepositoryFetchStatus.SUC
 import com.squareup.tools.maven.resolution.Repositories.Companion.DEFAULT
 import com.squareup.tools.maven.resolution.ResolutionResult
 import com.squareup.tools.maven.resolution.ResolvedArtifact
-import java.io.IOException
-import java.net.URI
-import java.nio.file.FileSystem
-import java.nio.file.FileSystems
-import java.nio.file.Files
-import java.nio.file.Path
-import java.util.Collections
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
-import kotlin.collections.Map.Entry
-import kotlin.system.measureTimeMillis
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -60,31 +49,42 @@ import kramer.GenerateMavenRepo.ArtifactResolution.AarArtifactResolution
 import kramer.GenerateMavenRepo.ArtifactResolution.FileArtifactResolution
 import kramer.GenerateMavenRepo.ArtifactResolution.JarArtifactResolution
 import org.apache.maven.model.Dependency
+import java.io.IOException
+import java.net.URI
+import java.nio.file.FileSystem
+import java.nio.file.FileSystems
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.collections.Map.Entry
+import kotlin.system.measureTimeMillis
 
 class GenerateMavenRepo(
   fs: FileSystem = FileSystems.getDefault()
 ) : CliktCommand(name = "gen-maven-repo") {
   internal val workspace: Path by option(
-      "--workspace",
-      help = "Path to the workspace to be generated."
+    "--workspace",
+    help = "Path to the workspace to be generated."
   )
-      .path(canBeFile = false, canBeSymlink = false, canBeDir = true)
-      .default(fs.getPath("${System.getProperties()["java.io.tmpdir"]}", "bazel/maven"))
+    .path(canBeFile = false, canBeSymlink = false, canBeDir = true)
+    .default(fs.getPath("${System.getProperties()["java.io.tmpdir"]}", "bazel/maven"))
 
   /** Name of the workspace - nearly always the nearest directory name of the workspace path */
   private val workspaceName: String by option("--workspace-name")
-      .defaultLazy { workspace.fileName.toString() }
+    .defaultLazy { workspace.fileName.toString() }
 
   private val specificationFile by option("--specification").path(mustExist = true).required()
 
   private val threadCount: Int by option("--threads").int()
-      .default(1)
+    .default(1)
 
   private val unknownPackagingStrategy: UnknownPackagingStrategy by option(
-      "--unknown-packaging"
+    "--unknown-packaging"
   )
-      .enum<UnknownPackagingStrategy>()
-      .default(UnknownPackagingStrategy.WARN)
+    .enum<UnknownPackagingStrategy>()
+    .default(UnknownPackagingStrategy.WARN)
 
   internal val kontext by requireObject<Kontext>()
 
@@ -141,34 +141,36 @@ class GenerateMavenRepo(
     val seen = ConcurrentHashMap<String, IndexEntry>()
     val unresolved = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
     val declaredArtifactSlugs = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+    val resolutions = Collections.newSetFromMap(ConcurrentHashMap<ArtifactResolution, Boolean>())
     val benchmark = measureTimeMillis {
       if (repoSpec.artifacts.isNotEmpty()) Files.createDirectories(workspace)
       runBlocking {
         kontext.out { "Building workspace for ${repoSpec.artifacts.size} artifacts" }
         repoSpec.artifacts.entries.asFlow()
-            .onEach {
-              // TODO: Validate per-artifact configuration (currently validated in starlark).
+          .onEach {
+            // TODO: Validate per-artifact configuration (currently validated in starlark).
+          }
+          .flatMapMerge(threadCount) { (artifact_spec, config) ->
+            resolvePomFlow(artifact_spec, seen, declaredArtifactSlugs, unresolved, config, exit)
+          }
+          .flatMapMerge(threadCount) { result ->
+            count.incrementAndGet()
+            when (result.resolved.model.packaging) {
+              "jar" -> packageJarFlow(result)
+              "bundle" -> packageJarFlow(result)
+              "aar" -> extractAarPackageFlow(result, exit)
+              else -> unknownPackageFlow(result, exit)
             }
-            .flatMapMerge(threadCount) { (artifact_spec, config) ->
-              resolvePomFlow(artifact_spec, seen, declaredArtifactSlugs, unresolved, config, exit)
-            }
-            .flatMapMerge(threadCount) { result ->
-              count.incrementAndGet()
-              when (result.resolved.model.packaging) {
-                "jar" -> packageJarFlow(result)
-                "bundle" -> packageJarFlow(result)
-                "aar" -> extractAarPackageFlow(result, exit)
-                else -> unknownPackageFlow(result, exit)
-              }
-            }
-            .map { resolution -> applyTemplate(resolution, repoSpec, seen) }
-            .flowOn(Dispatchers.IO)
-            .toListMultimapFlow() // Associate template operations with their build file
-            .flatMapMerge(threadCount) { (path, filledTemplates) ->
-              flow { emit(writeBuildFiles(path, filledTemplates, repoSpec.rulesLabel)) }
-            }
-            .count()
-            .let { kontext.out { "Generated $it build files in $workspace" } }
+          }
+          .onEach { resolution -> resolutions.add(resolution) /* Store for aliases */ }
+          .map { resolution -> applyTemplate(resolution, repoSpec, seen) }
+          .flowOn(Dispatchers.IO)
+          .toListMultimapFlow() // Associate template operations with their build file
+          .flatMapMerge(threadCount) { (path, filledTemplates) ->
+            flow { emit(writeBuildFiles(path, filledTemplates, repoSpec.rulesLabel)) }
+          }
+          .count()
+          .let { kontext.out { "Generated $it build files in $workspace" } }
 
         // Check for, and handle, any errors or mis-specifications.
         if (declaredArtifactSlugs.size != repoSpec.artifacts.size) {
@@ -193,6 +195,12 @@ class GenerateMavenRepo(
             handleMissingArtifacts(this)
           }
         }
+        if (repoSpec.generateRulesJvmCompatabilityTargets) {
+          val content = generateRulesJvmCompatibilityTargets(repoSpec, resolutions)
+          val path = workspace.resolve("BUILD.bazel")
+          Files.write(path, content.lines())
+          kontext.out { "Generated root compatibility build file in $workspace" }
+        }
       }
     }
     kontext.out {
@@ -200,7 +208,7 @@ class GenerateMavenRepo(
     }
     kontext.out { if (kontext.verbosity > 1) "using $threadCount threads." else "." }
     exit.get()
-        .let { status -> if (status != 0) throw ProgramResult(status) }
+      .let { status -> if (status != 0) throw ProgramResult(status) }
   }
 
   private fun writeBuildFiles(
@@ -210,11 +218,11 @@ class GenerateMavenRepo(
   ): Path {
     val android =
       templateApplications.map { it.resolution is AarArtifactResolution }
-          .reduce { b, acc -> b || acc }
+        .reduce { b, acc -> b || acc }
     val androidHeader = if (android) ANDROID_LOAD_HEADER else ""
     val content = templateApplications.joinToString(
-        "\n",
-        prefix = HEADER + androidHeader + RAW_LOAD_HEADER_TEMPLATE.format(mavenRulesRepo)
+      "\n",
+      prefix = HEADER + androidHeader + RAW_LOAD_HEADER_TEMPLATE.format(mavenRulesRepo)
     ) { it.content }
     Files.createDirectories(path.parent)
     Files.write(path, content.lines())
@@ -233,42 +241,42 @@ class GenerateMavenRepo(
     val visibility = "[\"//visibility:public\"]" // TODO configurable.
     val testonly = if (config.testonly) "\n    testonly = True," else ""
     val deps = prepareDependencies(resolved, config, seen, repoConfig)
-        .joinToString("") { d -> "        \"$d\",\n" }
-        .let { if (it.isNotBlank()) "\n$it    " else it }
+      .joinToString("") { d -> "        \"$d\",\n" }
+      .let { if (it.isNotBlank()) "\n$it    " else it }
 
     // If we have a build snippet, use that, else use the appropriate template for the type.
     val content = config.snippet ?: when (resolution) {
       is AarArtifactResolution -> mavenAarTemplate(
-          target = resolved.target,
-          coordinate = resolved.coordinate,
-          customPackage = resolution.androidPackage,
-          jetify = jetify,
-          deps = deps,
-          fetchRepo = resolved.fetchRepoPackage(),
-          testonly = testonly,
-          visibility = visibility,
-          libs = resolution.libs
+        target = resolved.target,
+        coordinate = resolved.coordinate,
+        customPackage = resolution.androidPackage,
+        jetify = jetify,
+        deps = deps,
+        fetchRepo = resolved.fetchRepoPackage(),
+        testonly = testonly,
+        visibility = visibility,
+        libs = resolution.libs
       )
       is JarArtifactResolution -> mavenJarTemplate(
-          target = resolved.target,
-          coordinate = resolved.coordinate,
-          jetify = jetify,
-          deps = deps,
-          fetchRepo = resolved.fetchRepoPackage(),
-          testonly = testonly,
-          visibility = visibility
+        target = resolved.target,
+        coordinate = resolved.coordinate,
+        jetify = jetify,
+        deps = deps,
+        fetchRepo = resolved.fetchRepoPackage(),
+        testonly = testonly,
+        visibility = visibility
       )
       else -> mavenFileTemplate(
-          target = resolved.target,
-          coordinate = resolved.coordinate,
-          deps = deps,
-          fetchRepo = resolved.fetchRepoPackage(),
-          testonly = testonly,
-          visibility = visibility
+        target = resolved.target,
+        coordinate = resolved.coordinate,
+        deps = deps,
+        fetchRepo = resolved.fetchRepoPackage(),
+        testonly = testonly,
+        visibility = visibility
       )
     }
     val path = workspace.resolve(resolved.groupPath)
-        .resolve("BUILD.bazel")
+      .resolve("BUILD.bazel")
     return path to TemplateApplication(resolution, content)
   }
 
@@ -385,10 +393,10 @@ class GenerateMavenRepo(
 
   private fun newResolver(): ArtifactResolver {
     return ArtifactResolver(
-        cacheDir = kontext.localRepository,
-        suppressAddRepositoryWarnings = true,
-        repositories = if (kontext.repositories.isNotEmpty()) kontext.repositories else DEFAULT,
-        modelInterceptor = ::filterBuildDeps
+      cacheDir = kontext.localRepository,
+      suppressAddRepositoryWarnings = true,
+      repositories = if (kontext.repositories.isNotEmpty()) kontext.repositories else DEFAULT,
+      modelInterceptor = ::filterBuildDeps
     )
   }
 }
@@ -398,12 +406,14 @@ class GenerateMavenRepo(
  * indexed values as a `Pair<A, Collection<B>>` (essentially a list-multimap flow)
  */
 private suspend fun <A, B> Flow<Pair<A, B>>.toListMultimapFlow(): Flow<Entry<A, Collection<B>>> {
-  return (this
+  return (
+    this
       .toList() // Collector
       .toImmutableListMultimap() // Associate snippets to their build file.
-      .asMap() as Map<A, Collection<B>>)
-      .entries
-      .asFlow()
+      .asMap() as Map<A, Collection<B>>
+    )
+    .entries
+    .asFlow()
 }
 
 private val jvmPackagingTypes = setOf("jar", "aar", "bundle")
@@ -424,42 +434,42 @@ private fun prepareDependencies(
     repoConfig.targetSubstitutes.getOrElse(resolved.groupId) { mapOf() }
   return when {
     config.deps.isNotEmpty() -> config.deps.asSequence()
-        .map {
-          if (it[0] in bazelPackagePrefixes) it
-          else unversionedDependency(it).targetFor(repoConfig.name, substitutes, resolved)
-        }
-        .toSet()
+      .map {
+        if (it[0] in bazelPackagePrefixes) it
+        else unversionedDependency(it).targetFor(repoConfig.name, substitutes, resolved)
+      }
+      .toSet()
 
     else -> resolved.model.dependencies.asSequence()
-        .filter { dep -> !dep.isOptional }
-        .filter { dep -> dep.slug !in config.exclude }
-        // need a more robust filter, as the dependency type is not guaranteed to be set, but this will do for now.
-        .filter { dep ->
-          when {
-            resolved.model.packaging in jvmPackagingTypes && dep.type in jvmPackagingTypes -> true
-            resolved.model.packaging !in jvmPackagingTypes && dep.type !in jvmPackagingTypes -> true
-            else -> false
-          }
+      .filter { dep -> !dep.isOptional }
+      .filter { dep -> dep.slug !in config.exclude }
+      // need a more robust filter, as the dependency type is not guaranteed to be set, but this will do for now.
+      .filter { dep ->
+        when {
+          resolved.model.packaging in jvmPackagingTypes && dep.type in jvmPackagingTypes -> true
+          resolved.model.packaging !in jvmPackagingTypes && dep.type !in jvmPackagingTypes -> true
+          else -> false
         }
-        .map { dep ->
-          JETIFIER_ARTIFACT_MAPPING[dep.slug]?.let { unversionedDependency(it) } ?: dep
-        }
-        .plus(
-            // add maven extra includes
-            config.include
-                .asSequence()
-                .filter { it[0] !in bazelPackagePrefixes }
-                .map { unversionedDependency(it) }
-        )
-        .onEach { dep ->
-          // Cache for later validation
-          val entry = seen.getOrPut(dep.slug) { GenerateMavenRepo.IndexEntry() }
-          entry.versions.add(dep.version)
-          entry.dependants.add(resolved.coordinate)
-        }
-        .map { dep -> dep.targetFor(repoConfig.name, substitutes, resolved) }
-        .plus(config.include.filter { it[0] in bazelPackagePrefixes }) // add bazel extra includes
-        .toSet()
+      }
+      .map { dep ->
+        JETIFIER_ARTIFACT_MAPPING[dep.slug]?.let { unversionedDependency(it) } ?: dep
+      }
+      .plus(
+        // add maven extra includes
+        config.include
+          .asSequence()
+          .filter { it[0] !in bazelPackagePrefixes }
+          .map { unversionedDependency(it) }
+      )
+      .onEach { dep ->
+        // Cache for later validation
+        val entry = seen.getOrPut(dep.slug) { GenerateMavenRepo.IndexEntry() }
+        entry.versions.add(dep.version)
+        entry.dependants.add(resolved.coordinate)
+      }
+      .map { dep -> dep.targetFor(repoConfig.name, substitutes, resolved) }
+      .plus(config.include.filter { it[0] in bazelPackagePrefixes }) // add bazel extra includes
+      .toSet()
   }
 }
 
@@ -470,19 +480,19 @@ private fun Dependency.targetFor(
 ): String {
   val bazelPackage = "@$repoName//$groupPath"
   val leafPackage = bazelPackage.split("/")
-      .last()
+    .last()
   val prefix = "$bazelPackage:"
   return "$prefix$target"
-      .let { d ->
-        substitutes.getOrElse(d) { d }
+    .let { d ->
+      substitutes.getOrElse(d) { d }
+    }
+    .let { d ->
+      when {
+        resolved.groupId == groupId -> d.removePrefix(bazelPackage)
+        leafPackage == target -> bazelPackage
+        else -> d
       }
-      .let { d ->
-        when {
-          resolved.groupId == groupId -> d.removePrefix(bazelPackage)
-          leafPackage == target -> bazelPackage
-          else -> d
-        }
-      }
+    }
 }
 
 internal enum class UnknownPackagingStrategy {

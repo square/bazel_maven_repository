@@ -17,12 +17,6 @@ package kramer.integration
 import com.github.ajalt.clikt.core.subcommands
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
-import java.io.ByteArrayOutputStream
-import java.io.PrintStream
-import java.nio.file.FileSystems
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
 import kramer.GenerateMavenRepo
 import kramer.Kontext
 import kramer.Kramer
@@ -32,9 +26,15 @@ import kramer.parseJson
 import org.junit.After
 import org.junit.Ignore
 import org.junit.Test
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
+import java.nio.file.FileSystems
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 
 /**
- * Integration tests for [GenerateMavenRepoCommand]. These are dependent on access to the network
+ * Integration tests for [GenerateMavenRepo]. These are dependent on access to the network
  * and to the maven repositories it fetches from. It's runtime depends on latencies and throughput
  * to the above repositories. That said, from a home office internet it completes in less than 10
  * seconds on average (which includes 2 large no-cache scenarios).
@@ -51,7 +51,7 @@ class GenerateMavenRepoIntegrationTest {
 
   @After fun tearDown() {
     tmpDir.toFile()
-        .deleteRecursively()
+      .deleteRecursively()
     check(!Files.exists(cacheDir)) { "Failed to tear down and delete temp directory." }
   }
 
@@ -75,14 +75,14 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(output).contains("Generated 1 build files in ")
     assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
     assertThat(output)
-        .contains("ERROR: com.squareup.sqldelight:runtime:1.4.0 is not a supported packaging, pom")
+      .contains("ERROR: com.squareup.sqldelight:runtime:1.4.0 is not a supported packaging, pom")
   }
 
   @Test fun unknownPackagingWarn() {
     val args = configFlags("unhandled-packaging", "gen-maven-repo")
     val output = cmd.test(
-        args + listOf("--unknown-packaging", UnknownPackagingStrategy.WARN.name),
-        baos
+      args + listOf("--unknown-packaging", UnknownPackagingStrategy.WARN.name),
+      baos
     )
     assertThat(output).contains("Building workspace for 1 artifacts")
     assertThat(output).contains("Generated 1 build files in ")
@@ -102,8 +102,8 @@ class GenerateMavenRepoIntegrationTest {
   @Test fun unknownPackagingIgnore() {
     val args = configFlags("unhandled-packaging", "gen-maven-repo")
     val output = cmd.test(
-        args + listOf("--unknown-packaging", UnknownPackagingStrategy.IGNORE.name),
-        baos
+      args + listOf("--unknown-packaging", UnknownPackagingStrategy.IGNORE.name),
+      baos
     )
     assertThat(output).contains("Building workspace for 1 artifacts")
     assertThat(output).contains("Generated 1 build files in ")
@@ -130,9 +130,9 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
 
     assertThat(output)
-        .contains("ERROR: Un-declared artifacts referenced in the dependencies of some artifacts.")
+      .contains("ERROR: Un-declared artifacts referenced in the dependencies of some artifacts.")
     assertThat(output)
-        .contains(""""org.apache.maven:maven-builder-support:3.6.3": {"insecure": True}""")
+      .contains(""""org.apache.maven:maven-builder-support:3.6.3": {"insecure": True}""")
     assertThat(output).contains(""""exclude": ["org.apache.maven:maven-builder-support"]""")
   }
 
@@ -188,11 +188,15 @@ class GenerateMavenRepoIntegrationTest {
     val output = cmd.fail(args, baos)
 
     assertThat(output)
-        .contains("ERROR: Invalid config: com.google.jimfs:jimfs:1.1 may only be configured " +
-            "with build_snippet, or deps, or include/exclude mechanisms.")
+      .contains(
+        "ERROR: Invalid config: com.google.jimfs:jimfs:1.1 may only be configured " +
+          "with build_snippet, or deps, or include/exclude mechanisms."
+      )
     assertThat(output)
-        .contains("ERROR: Invalid config: com.helpshift:android-helpshift-aar:7.8.0 " +
-        "may only be configured with build_snippet, or deps, or include/exclude mechanisms.")
+      .contains(
+        "ERROR: Invalid config: com.helpshift:android-helpshift-aar:7.8.0 " +
+          "may only be configured with build_snippet, or deps, or include/exclude mechanisms."
+      )
   }
 
   @Test fun buildSnippetOverridesUndeclared() {
@@ -224,7 +228,8 @@ class GenerateMavenRepoIntegrationTest {
     val support = mavenRepo.readBuildFile("androidx.core")
     assertThat(support).contains("deps = [\":core_classes\"] + [] + [")
 
-    assertThat(helpshift).contains("""
+    assertThat(helpshift).contains(
+      """
       |    deps = [":android-helpshift-aar_classes"] + [
       |        ":android-helpshift-aar_libs_logger",
       |        ":android-helpshift-aar_libs_core",
@@ -241,7 +246,8 @@ class GenerateMavenRepoIntegrationTest {
       |    ],""".trimMargin()
     )
 
-    assertThat(helpshift).contains("""
+    assertThat(helpshift).contains(
+      """
       |raw_jvm_import(
       |    name = "android-helpshift-aar_libs_logger",
       |    jar = "@com_helpshift_android_helpshift_aar//maven:libs/logger.jar",
@@ -281,7 +287,7 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(output).contains("Generated 1 build files in ")
     assertThat(output).contains("Resolved 1 artifacts with 100 threads in")
     assertThat(output)
-        .contains("ERROR: Un-declared artifacts referenced in the dependencies of some artifacts.")
+      .contains("ERROR: Un-declared artifacts referenced in the dependencies of some artifacts.")
 
     // Picasso declares dep on com.android.support:support-annotation. Want to see androidx here.
     assertThat(output).contains("androidx.annotation:annotation:<SOME_VERSION>")
@@ -295,11 +301,11 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(output).contains("Resolved 3 artifacts with 100 threads in")
 
     assertThat(output)
-        .contains("ERROR: Jetifier enabled but pre-androidX support artifacts specified:")
+      .contains("ERROR: Jetifier enabled but pre-androidX support artifacts specified:")
     assertThat(output)
-        .contains(
-            "com.android.support:support-annotations (should be androidx.annotation:annotation)"
-        )
+      .contains(
+        "com.android.support:support-annotations (should be androidx.annotation:annotation)"
+      )
     assertThat(output).doesNotContain("javax.inject:javax.inject")
   }
 
@@ -311,26 +317,51 @@ class GenerateMavenRepoIntegrationTest {
     assertThat(output).contains("Resolved 3 artifacts with 100 threads in")
   }
 
+  @Test fun legacyCompatibilityAliasesForRulesJvmExternal() {
+    val args = configFlags("compatibility-aliases", "gen-maven-repo")
+    val output = cmd.test(args, baos)
+    assertThat(output).contains("Building workspace for 5 artifacts")
+    assertThat(output).contains("Generated 5 build files in ")
+    assertThat(output).contains("Resolved 5 artifacts with 100 threads in")
+    val buildFile = mavenRepo.workspace.resolve("BUILD.bazel")
+    assertThat(Files.exists(buildFile)).isTrue()
+    val buildFileContents = Files.readAllLines(buildFile).joinToString("\n")
+    assertThat(buildFileContents)
+      .contains(
+        """alias(name = "com_google_guava_guava", actual = "@maven//com/google/guava:guava")"""
+      )
+    assertThat(buildFileContents)
+      .contains(
+        """alias(name = "com_helpshift_android_helpshift_aar",""" +
+          """ actual = "@maven//com/helpshift:android-helpshift-aar")"""
+      )
+    assertThat(buildFileContents)
+      .contains(
+        """alias(name = "javax_inject_javax_inject",""" +
+          """ actual = "@maven//javax/inject:javax_inject")"""
+      )
+  }
+
   @Test fun largeListOfArtifacts() {
     val args = configFlags("large", "gen-maven-repo")
     val output = cmd.test(args, baos)
 
     assertWithMessage("missing groups and labels")
-        .that(
-            readLabelIndexFromConfigOf("large")
-                .asSequence()
-                .flatMap { (groupId, arts) ->
-                  val build = mavenRepo.maybeReadBuildFile(groupId)
-                  arts.asSequence()
-                      .filterNot { lbl ->
-                        build?.contains(lbl) ?: false
-                      }
-                      .map { lbl -> "$groupId -> $lbl" }
-                }
-                .sorted()
-                .toList()
-        )
-        .isEmpty()
+      .that(
+        readLabelIndexFromConfigOf("large")
+          .asSequence()
+          .flatMap { (groupId, arts) ->
+            val build = mavenRepo.maybeReadBuildFile(groupId)
+            arts.asSequence()
+              .filterNot { lbl ->
+                build?.contains(lbl) ?: false
+              }
+              .map { lbl -> "$groupId -> $lbl" }
+          }
+          .sorted()
+          .toList()
+      )
+      .isEmpty()
 
     assertThat(output).contains("Building workspace for 463 artifacts")
     assertThat(output).contains("Generated 228 build files in ")
@@ -353,11 +384,11 @@ class GenerateMavenRepoIntegrationTest {
     val output1 = cmd.test(configFlags("large", "gen-maven-repo"), baos)
     val result1 = timingMatcher.find(output1)
     assertWithMessage("Expected to match ${timingMatcher.pattern}").that(result1)
-        .isNotNull()
+      .isNotNull()
     val time1 = result1!!.groupValues[1].toFloat()
     assertWithMessage("Expected non-cached first run, but run took $time1 seconds")
-        .that(time1)
-        .isGreaterThan(4.0f)
+      .that(time1)
+      .isGreaterThan(4.0f)
 
     assertThat(Files.exists(cacheDir.resolve("junit/junit/4.13/junit-4.13.pom"))).isTrue()
     val output2 = cmd.test(
@@ -366,11 +397,11 @@ class GenerateMavenRepoIntegrationTest {
     )
     val result2 = timingMatcher.find(output2)
     assertWithMessage("Expected to match ${timingMatcher.pattern}").that(result2)
-        .isNotNull()
+      .isNotNull()
     val time2 = result2!!.groupValues[1].toFloat()
     assertWithMessage("Expected fast cache run but took $time2 seconds")
-        .that(time2)
-        .isLessThan(3.0f)
+      .that(time2)
+      .isLessThan(3.0f)
 
     assertThat(output2).contains("Resolved 469 artifacts with 100 threads in ")
   }
@@ -378,7 +409,7 @@ class GenerateMavenRepoIntegrationTest {
   private fun GenerateMavenRepo.readBuildFile(groupId: String): String {
     return maybeReadBuildFile(groupId) { buildFile ->
       assertWithMessage("File does not exist: $buildFile").that(Files.exists(buildFile))
-          .isTrue()
+        .isTrue()
     }!!
   }
 
@@ -389,31 +420,31 @@ class GenerateMavenRepoIntegrationTest {
     val groupPath = groupId.replace(".", "/")
     val workspace = workspace.toAbsolutePath()
     val buildFile = workspace.resolve(groupPath)
-        .resolve("BUILD.bazel")
+      .resolve("BUILD.bazel")
     validate(buildFile)
     if (Files.exists(buildFile)) {
       return Files.readAllLines(buildFile)
-          .joinToString("\n")
+        .joinToString("\n")
     }
     return null
   }
 
   private fun readLabelIndexFromConfigOf(label: String): Map<String, MutableSet<String>> {
     val spec = Kontext(localRepository = cacheDir).parseJson(
-        FileSystems.getDefault()
-            .getPath("$runfiles/$relativeDir/$packageDir/test-$label-config.json"),
-        RepositorySpecification::class
+      FileSystems.getDefault()
+        .getPath("$runfiles/$relativeDir/$packageDir/test-$label-config.json"),
+      RepositorySpecification::class
     )
     return spec.artifacts.keys.asSequence()
-        .map { spec ->
-          val (groupId, art, _) = spec.split(":")
-          return@map groupId to "\"" + art.replace(".", "_") + "\""
+      .map { spec ->
+        val (groupId, art, _) = spec.split(":")
+        return@map groupId to "\"" + art.replace(".", "_") + "\""
+      }
+      .fold(mutableMapOf()) { acc, (groupId, lbl) ->
+        acc.apply {
+          getOrPut(groupId, ::mutableSetOf).add(lbl)
         }
-        .fold(mutableMapOf()) { acc, (groupId, lbl) ->
-          acc.apply {
-            getOrPut(groupId, ::mutableSetOf).add(lbl)
-          }
-        }
+      }
   }
 
   private fun configFlags(
