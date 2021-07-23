@@ -13,32 +13,71 @@ on:
     branches: [ master ]
 
 jobs:
-  test:
+  test_main_workspace:
     strategy:
       matrix:
         os:
           - ubuntu-latest
           - macos-latest
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-java@v1
-        with:
-          java-version: 1.8
-      - name: Mount caches
-        uses: actions/cache@v2
-        with:
-          path: |
-            "/home/runner/.cache/bazel"
-            "/home/runner/.m2/repository"
-          key: caches-${{ runner.os }}
-      - name: Setup bazelisk for Bazel builds
-        uses: holvonix-open/setup-bazelisk@v0.6.1
-      - name: Test All
-        run: bazel test //...
-      - name: Test Kramer
-        run: (cd kramer && bazel test //...)
-      - name: Build the Test Workspace
-        run: (cd test/test_workspace && bazel build //...)
-      - name: Test the Test Workspace
-        run: (cd test/test_workspace && bazel test //...)
+      runs-on: ${{ matrix.os }}
+      steps:
+        - uses: actions/checkout@v2
+        - uses: actions/setup-java@v1
+          with: { java-version: 1.8 }
+        - name: Mount caches
+          uses: actions/cache@v2
+          with:
+            path: |
+              "/home/runner/.cache/bazel"
+              "/home/runner/.m2/repository"
+            key: caches-${{ runner.os }}
+        - name: Setup bazelisk for Bazel builds
+          uses: holvonix-open/setup-bazelisk@v0.6.1
+        - name: Test All
+          run: bazel test //...
+  test_kramer:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+      runs-on: ${{ matrix.os }}
+      steps:
+        - uses: actions/checkout@v2
+        - uses: actions/setup-java@v1
+          with: { java-version: 1.8 }
+        - name: Mount caches
+          uses: actions/cache@v2
+          with:
+            path: |
+              "/home/runner/.cache/bazel"
+              "/home/runner/.m2/repository"
+            key: caches-${{ runner.os }}
+        - name: Setup bazelisk for Bazel builds
+          uses: holvonix-open/setup-bazelisk@v0.6.1
+        - name: Test Kramer
+          run: (cd kramer && bazel test //...)
+  test_workspace:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+      runs-on: ${{ matrix.os }}
+      steps:
+        - uses: actions/checkout@v2
+        - uses: actions/setup-java@v1
+          with: { java-version: 1.8 }
+        - name: Mount caches
+          uses: actions/cache@v2
+          with:
+            path: |
+              "/home/runner/.cache/bazel"
+              "/home/runner/.m2/repository"
+            key: caches-${{ runner.os }}
+        - name: Setup bazelisk for Bazel builds
+          uses: holvonix-open/setup-bazelisk@v0.6.1
+        - name: Build the Test Workspace
+          run: (cd test/test_workspace && bazel build //...)
+        - name: Test the Test Workspace
+          run: (cd test/test_workspace && bazel test //...)
