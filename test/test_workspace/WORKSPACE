@@ -181,6 +181,7 @@ maven_repository_specification(
         "google": "https://dl.google.com/dl/android/maven2",
     },
     use_jetifier = True,
+    generate_rules_jvm_compatability_targets = True,
 )
 
 # Set up the standard android SDK repository, upon which depend a lot of the android tooling in bazel.
