@@ -211,11 +211,17 @@ def maven_repository_specification(
         # an older artifact will not trigger an error.
         ignore_legacy_android_support_artifacts = False,
 
-        # Optional list of repositories which the build rule will attempt to fetch maven artifacts and metadata.
+        # Optional list of repositories which the build rule will attempt to fetch maven artifacts
+        # and metadata.
         repository_urls = {"central": "https://repo1.maven.org/maven2"},
 
-        # Optional number of threads to use while fetching and generating build targets for maven artifacts.
-        fetch_threads = 100):
+        # Optional number of threads to use while fetching and generating build targets for maven
+        # artifacts.
+        fetch_threads = 100,
+
+        # Add a BUILD file in the root of the workspace, with alias targets to mirror the addressing
+        # approach of rules_jvm_external
+        generate_rules_jvm_compatability_targets = False):
     # Define repository rule for the jetifier tooling. It may end up unused, but the repo needs to
     # be defined.
     jetifier_init()
@@ -250,6 +256,7 @@ def maven_repository_specification(
         jetifier_excludes = jetifier_excludes if use_jetifier else [],
         ignore_legacy_android_support_artifacts = ignore_legacy_android_support_artifacts,
         maven_rules_repository = "maven_repository_rules",
+        generate_rules_jvm_compatability_targets = generate_rules_jvm_compatability_targets,
         artifacts = artifacts,
     )
 

@@ -9,5 +9,6 @@
   "ignore_legacy_android_support_artifacts": true,
   "name": "maven",
   "target_substitutes": {},
-  "use_jetifier": true
+  "use_jetifier": true,
+  "generate_rules_jvm_compatability_targets": false
 }
