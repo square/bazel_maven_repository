@@ -16,8 +16,13 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ ubuntu-latest, macos-latest ]
-        workspace: [ ".", "test/test_workspace", "kramer" ]
+        os:
+          - ubuntu-latest
+          - macos-latest
+        workspace:
+          - .
+          - test/test_workspace
+          - kramer
       runs-on: ${{ matrix.os }}
       steps:
         - uses: actions/checkout@v2
