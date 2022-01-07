@@ -17,25 +17,23 @@ package kramer
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.findOrSetObject
 import com.github.ajalt.clikt.core.subcommands
-import com.github.ajalt.clikt.parameters.options.counted
-import com.github.ajalt.clikt.parameters.options.default
-import com.github.ajalt.clikt.parameters.options.option
-import com.github.ajalt.clikt.parameters.options.required
+import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.path
 import com.squareup.tools.maven.resolution.GlobalConfig
 import com.squareup.tools.maven.resolution.Repositories
 import java.io.PrintStream
+import org.apache.maven.model.Repository
 import java.nio.file.FileSystem
 import java.nio.file.FileSystems
+import java.nio.file.Files
 import java.nio.file.Path
-import org.apache.maven.model.Repository
 
 fun main(vararg argv: String) = Kramer()
   .subcommands(FetchArtifactCommand(), GenerateMavenRepo())
   .main(argv.toList())
 
 internal class Kramer(
-  fs: FileSystem = FileSystems.getDefault(),
+  val fs: FileSystem = FileSystems.getDefault(),
   private val output: PrintStream = System.out
 ) : CliktCommand() {
 
@@ -44,7 +42,7 @@ internal class Kramer(
     "--settings",
     envvar = "BAZEL_MAVEN_SETTINGS",
     help = "Settings which can be optionally specified, which override values in the main config"
-  ).path(mustExist = true)
+  ).path()
 
   /** the settings from the main specification that are used by all commands */
   private val configFile by option(
@@ -69,10 +67,15 @@ internal class Kramer(
     Kontext(verbosity = verbosity, localRepository = localRepository, output = output)
   }
 
+
   override fun run() {
     GlobalConfig.verbose = verbosity > 0
     GlobalConfig.debug = verbosity > 1
-    kontext.settings = kontext.parseJson(settingsFile, Settings())
+    val defaultSettingsFile = fs.getPath("${System.getProperties()["user.home"]}", ".m2/settings.json")
+    kontext.settings = kontext.parseJson(
+      settingsFile ?: if(Files.exists(defaultSettingsFile)) defaultSettingsFile else null,
+      Settings()
+    )
     kontext.config = kontext.parseJson(configFile, KramerConfig::class)
   }
 }

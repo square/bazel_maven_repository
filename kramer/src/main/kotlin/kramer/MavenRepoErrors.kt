@@ -49,7 +49,7 @@ internal fun GenerateMavenRepo.handleMissingArtifacts(remainder: Map<String, Ind
     val version = when (details.versions.size) {
       0 -> throw AssertionError("Seen must contain at least one version.")
       1 -> details.versions.first()
-      else -> details.versions.map { MavenVersion.from(it) }.max()!!
+      else -> details.versions.maxOfOrNull { MavenVersion.from(it) }
     }
     kontext.out { "    \"$slug:$version\": {\"insecure\": True}," }
   }

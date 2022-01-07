@@ -2,9 +2,9 @@ workspace(name = "test_workspace")
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-MAVEN_REPOSITORY_RULES_VERSION = "2.0.0-alpha-3"
+MAVEN_REPOSITORY_RULES_VERSION = "2.0.0-alpha-5"
 
-MAVEN_REPOSITORY_RULES_CHECKSUM = "853976a2e4908f010568aad8f47b1a1e87e258f33b114e6e92599dc2779938c4"
+MAVEN_REPOSITORY_RULES_CHECKSUM = "fde80cafa02a2c034cc8086c158f500e7b6ceb16d251273a6cc82f1c0723e0e8"
 
 # Create a bazel workspace to represent the maven universe.
 http_archive(
@@ -22,7 +22,7 @@ http_archive(
 load("@maven_repository_rules//maven:maven.bzl", "maven_repository_specification")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-KOTLIN_VERSION = "1.3.72"
+KOTLIN_VERSION = "1.4.32"
 
 KOTLINC_ROOT = "https://github.com/JetBrains/kotlin/releases/download"
 
@@ -31,18 +31,17 @@ KOTLINC_URL = "{root}/v{v}/kotlin-compiler-{v}.zip".format(
     v = KOTLIN_VERSION,
 )
 
-KOTLINC_SHA = "ccd0db87981f1c0e3f209a1a4acb6778f14e63fe3e561a98948b5317e526cc6c"
+KOTLINC_SHA = "dfef23bb86bd5f36166d4ec1267c8de53b3827c446d54e82322c6b6daad3594c"
 
-KOTLIN_RULES_VERSION = "legacy-1.4.0-rc3"
+KOTLIN_RULES_VERSION = "1.5.0-beta-3"
 
-KOTLIN_RULES_SHA = "da0e6e1543fcc79e93d4d93c3333378f3bd5d29e82c1bc2518de0dbe048e6598"
+KOTLIN_RULES_SHA = "58edd86f0f3c5b959c54e656b8e7eb0b0becabd412465c37a2078693c2571f7f"
 
 http_archive(
     name = "io_bazel_rules_kotlin",
     sha256 = KOTLIN_RULES_SHA,
-    urls = ["https://github.com/bazelbuild/rules_kotlin/releases/download/%s/rules_kotlin_release.tgz" % KOTLIN_RULES_VERSION],
+    urls = ["https://github.com/bazelbuild/rules_kotlin/releases/download/v%s/rules_kotlin_release.tgz" % KOTLIN_RULES_VERSION],
 )
-
 load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kotlin_repositories", "kt_register_toolchains")
 
 kotlin_repositories(compiler_release = {
@@ -57,7 +56,7 @@ maven_repository_specification(
 
     # The artifact spec list.
     artifacts = {
-        "com.github.ajalt:clikt:2.7.1": {"insecure": True},
+        "com.github.ajalt.clikt:clikt-jvm:3.2.0": {"insecure": True},
         "com.google.code.findbugs:jsr305:3.0.2": {"insecure": True},
         "com.google.errorprone:error_prone_annotations:2.3.1": {"insecure": True},
         "com.google.guava:guava:27.1-jre": {
@@ -103,6 +102,8 @@ maven_repository_specification(
         "org.jetbrains.kotlin:kotlin-reflect:%s" % KOTLIN_VERSION: {"insecure": True},
         "org.jetbrains.kotlin:kotlin-stdlib-common:%s" % KOTLIN_VERSION: {"insecure": True},
         "org.jetbrains.kotlin:kotlin-stdlib:%s" % KOTLIN_VERSION: {"insecure": True},
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk7:%s" % KOTLIN_VERSION: {"insecure": True},
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk8:%s" % KOTLIN_VERSION: {"insecure": True},
         "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.5": {"insecure": True},
         "org.jetbrains:annotations:13.0": {"insecure": True},
         "org.pantsbuild:jarjar:1.7.2": {
@@ -125,6 +126,6 @@ maven_repository_specification(
 
 android_sdk_repository(
     name = "androidsdk",
-    api_level = 29,
-    build_tools_version = "29.0.3",
+    api_level = 30,
+    build_tools_version = "30.0.1",
 )

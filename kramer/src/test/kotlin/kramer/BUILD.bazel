@@ -16,10 +16,9 @@ load("@io_bazel_rules_kotlin//kotlin:kotlin.bzl", "kt_jvm_test")
 kt_jvm_test(
     name = "CommonTest",
     srcs = ["CommonTest.kt"],
-    friends = ["//src/main/kotlin/kramer"],
+    associates = ["//src/main/kotlin/kramer"],
     test_class = "kramer.CommonTest",
     deps = [
-        "//src/main/kotlin/kramer",
         "@maven//com/google/truth",
         "@maven//junit",
     ],
@@ -28,10 +27,9 @@ kt_jvm_test(
 kt_jvm_test(
     name = "ConfigurationTest",
     srcs = ["ConfigurationTest.kt"],
-    friends = ["//src/main/kotlin/kramer"],
+    associates = ["//src/main/kotlin/kramer"],
     test_class = "kramer.ConfigurationTest",
     deps = [
-        "//src/main/kotlin/kramer",
         "@maven//com/google/truth",
         "@maven//junit",
     ],
@@ -40,10 +38,9 @@ kt_jvm_test(
 kt_jvm_test(
     name = "JetifierTest",
     srcs = ["JetifierTest.kt"],
-    friends = ["//src/main/kotlin/kramer"],
+    associates = ["//src/main/kotlin/kramer"],
     test_class = "kramer.JetifierTest",
     deps = [
-        "//src/main/kotlin/kramer",
         "@maven//com/google/truth",
         "@maven//junit",
     ],
@@ -52,10 +49,9 @@ kt_jvm_test(
 kt_jvm_test(
     name = "KontextTest",
     srcs = ["KontextTest.kt"],
-    friends = ["//src/main/kotlin/kramer"],
+    associates = ["//src/main/kotlin/kramer"],
     test_class = "kramer.KontextTest",
     deps = [
-        "//src/main/kotlin/kramer",
         "@maven//com/google/truth",
         "@maven//junit",
     ],

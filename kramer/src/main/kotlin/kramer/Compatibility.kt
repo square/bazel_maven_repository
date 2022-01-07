@@ -7,7 +7,7 @@ internal fun generateRulesJvmCompatibilityTargets(
   resolutions: Set<ArtifactResolution>
 ): String {
   val snippets = resolutions.sortedBy { (artifact) -> artifact.coordinate }
-    .map { (artifact, config) ->
+    .map { (artifact, _) ->
       val compatibilityTarget = (artifact.groupId + "_" + artifact.artifactId)
         .replace("[-.]".toRegex(), "_")
       val target = "@${repoSpec.name}//${artifact.groupPath}:${artifact.target}"

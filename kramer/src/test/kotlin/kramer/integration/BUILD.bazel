@@ -18,7 +18,7 @@ kt_jvm_library(
     testonly = True,
     srcs = ["TestUtils.kt"],
     deps = [
-        "@maven//com/github/ajalt:clikt",
+        "@maven//com/github/ajalt/clikt:clikt-jvm",
     ],
 )
 
@@ -27,11 +27,10 @@ kt_jvm_test(
     size = "large",
     srcs = ["FetchArtifactIntegrationTest.kt"],
     data = glob(["*.json"]),
-    friends = ["//src/main/kotlin/kramer"],
+    associates = ["//src/main/kotlin/kramer"],
     test_class = "kramer.integration.FetchArtifactIntegrationTest",
     deps = [
         ":testlib",
-        "//src/main/kotlin/kramer",
         "@maven//com/google/truth",
         "@maven//junit",
     ],
@@ -42,11 +41,10 @@ kt_jvm_test(
     size = "large",
     srcs = ["GenerateMavenRepoIntegrationTest.kt"],
     data = glob(["*.json"]),
-    friends = ["//src/main/kotlin/kramer"],
+    associates = ["//src/main/kotlin/kramer"],
     test_class = "kramer.integration.GenerateMavenRepoIntegrationTest",
     deps = [
         ":testlib",
-        "//src/main/kotlin/kramer",
         "@maven//com/google/truth",
         "@maven//junit",
     ],

@@ -85,7 +85,7 @@ internal class FetchArtifactCommand : CliktCommand(name = "fetch-artifact") {
       modelInterceptor = ::filterBuildDeps
     )
     val artifact = resolver.artifactFor(spec)
-    val resolved: ResolvedArtifact = resolver.resolveArtifact(artifact) ?: kontext.exit(1) {
+    val resolved: ResolvedArtifact = resolver.resolve(artifact).artifact ?: kontext.exit(1) {
       "ERROR: Could not resolve $spec! Attempted from ${repositories.map { it.url }}"
     }
     val status = resolver.downloadArtifact(artifact = resolved)
@@ -126,7 +126,7 @@ internal class FetchArtifactCommand : CliktCommand(name = "fetch-artifact") {
   }
 
   override fun run() {
-    var result: FetchResult? = null
+    var result: FetchResult?
     val benchmark = measureTimeMillis {
       result = fetch(artifactSpec)
       with(result!!) {

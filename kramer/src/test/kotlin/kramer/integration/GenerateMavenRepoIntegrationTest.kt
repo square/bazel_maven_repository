@@ -430,12 +430,12 @@ class GenerateMavenRepoIntegrationTest {
   }
 
   private fun readLabelIndexFromConfigOf(label: String): Map<String, MutableSet<String>> {
-    val spec = Kontext(localRepository = cacheDir).parseJson(
+    val repoSpecification = Kontext(localRepository = cacheDir).parseJson(
       FileSystems.getDefault()
         .getPath("$runfiles/$relativeDir/$packageDir/test-$label-config.json"),
       RepositorySpecification::class
     )
-    return spec.artifacts.keys.asSequence()
+    return repoSpecification.artifacts.keys.asSequence()
       .map { spec ->
         val (groupId, art, _) = spec.split(":")
         return@map groupId to "\"" + art.replace(".", "_") + "\""

@@ -305,7 +305,7 @@ class GenerateMavenRepo(
     return flow {
       val (resolved, config) = resolution
       val resolver = newResolver()
-      var status: FetchStatus? = null
+      var status: FetchStatus?
       val time = measureTimeMillis {
         status = resolver.downloadArtifact(resolved)
       }
@@ -370,7 +370,7 @@ class GenerateMavenRepo(
       val entry = seen.getOrPut(slug) { IndexEntry() }
       entry.versions.add(artifact.version)
       declaredArtifactSlugs.add(slug)
-      var tmp: ResolutionResult? = null
+      var tmp: ResolutionResult?
       val time = measureTimeMillis {
         tmp = resolver.resolve(artifact)
       }
